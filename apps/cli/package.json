@@ -1,0 +1,32 @@
+{
+  "name": "vett",
+  "version": "0.1.0",
+  "description": "CLI for the Vett secure agent skill registry",
+  "type": "module",
+  "bin": {
+    "vett": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "vett",
+    "agent",
+    "skills",
+    "registry",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@vett/core": "workspace:*",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3"
+  }
+}
