@@ -144,7 +144,8 @@ function parseGitHostUrl(
   }
 
   // Keep original path for fetching (lowercase, .md stripped)
-  const path = skillPath.length > 0 ? skillPath.map((p) => p.replace(/\.md$/i, '')).join('/') : undefined;
+  const path =
+    skillPath.length > 0 ? skillPath.map((p) => p.replace(/\.md$/i, '')).join('/') : undefined;
 
   // Normalize skill path for ID (strips 'skills/' prefix)
   const skill = normalizeSkillPath(skillPath);

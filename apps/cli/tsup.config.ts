@@ -1,0 +1,16 @@
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+  entry: ['src/index.ts'],
+  format: ['esm'],
+  target: 'node20',
+  outDir: 'dist',
+  clean: true,
+  splitting: false,
+  sourcemap: true,
+  dts: false,
+  banner: {
+    js: '#!/usr/bin/env node',
+  },
+  noExternal: ['@vett/core', '@clack/prompts', '@clack/core', 'picocolors', 'sisteransi', 'is-unicode-supported'],
+});

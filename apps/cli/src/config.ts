@@ -7,9 +7,13 @@ const CONFIG_DIR = join(homedir(), '.vett');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 const SKILLS_DIR = join(CONFIG_DIR, 'skills');
 
+function getDefaultRegistryUrl(): string {
+  return process.env.VETT_REGISTRY_URL || 'https://vett.sh';
+}
+
 const DEFAULT_CONFIG: VettConfig = {
   installDir: SKILLS_DIR,
-  registryUrl: 'https://vett.sh',
+  registryUrl: getDefaultRegistryUrl(),
   installedSkills: [],
 };
 
@@ -25,17 +29,25 @@ export function ensureConfigDir(): void {
 export function loadConfig(): VettConfig {
   ensureConfigDir();
 
+  let config = DEFAULT_CONFIG;
+
   if (!existsSync(CONFIG_FILE)) {
     saveConfig(DEFAULT_CONFIG);
-    return DEFAULT_CONFIG;
+  } else {
+    try {
+      const content = readFileSync(CONFIG_FILE, 'utf-8');
+      config = { ...DEFAULT_CONFIG, ...JSON.parse(content) };
+    } catch {
+      // Use default
+    }
   }
 
-  try {
-    const content = readFileSync(CONFIG_FILE, 'utf-8');
-    return { ...DEFAULT_CONFIG, ...JSON.parse(content) };
-  } catch {
-    return DEFAULT_CONFIG;
+  // Env var always takes precedence
+  if (process.env.VETT_REGISTRY_URL) {
+    config.registryUrl = process.env.VETT_REGISTRY_URL;
   }
+
+  return config;
 }
 
 export function saveConfig(config: VettConfig): void {
@@ -44,6 +56,10 @@ export function saveConfig(config: VettConfig): void {
 }
 
 export function getSkillPath(owner: string, repo: string, name: string): string {
+  return join(SKILLS_DIR, owner, repo, name);
+}
+
+export function getSkillDir(owner: string, repo: string, name: string): string {
   return join(SKILLS_DIR, owner, repo, name);
 }
 

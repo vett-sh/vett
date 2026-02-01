@@ -7,8 +7,8 @@
     "vett": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js"
   },
@@ -22,11 +22,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@clack/prompts": "^1.0.0",
     "@vett/core": "workspace:*",
-    "commander": "^12.1.0"
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
     "typescript": "^5.6.3"
   }
 }
