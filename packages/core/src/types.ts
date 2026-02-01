@@ -1,11 +1,40 @@
-import type {
-  PermissionType,
-  AccessLevel,
-  ScanStatus,
-  ScanEngine,
-  SkillSource,
-  RiskLevel,
-} from './constants.js';
+import type { ScanStatus, SkillSource, RiskLevel } from './constants.js';
+
+// Issue types for security analysis
+export const ISSUE_TYPES = [
+  'data_exfil',
+  'identity_manipulation',
+  'excessive_permissions',
+  'obfuscation',
+  'shell_execution',
+  'arbitrary_network',
+  'credential_access',
+] as const;
+
+export type IssueType = (typeof ISSUE_TYPES)[number];
+
+// Security flag from analysis
+export interface SecurityFlag {
+  type: IssueType;
+  evidence: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+}
+
+// Permissions detected in a skill
+export interface AnalysisPermissions {
+  filesystem: string[];
+  network: string[];
+  env: string[];
+}
+
+// Full analysis result from the scanner
+export interface AnalysisResult {
+  v: 1; // Schema version - increment when structure changes
+  risk: RiskLevel;
+  permissions: AnalysisPermissions;
+  flags: SecurityFlag[];
+  summary: string;
+}
 
 export interface Skill {
   id: string;
@@ -26,36 +55,11 @@ export interface SkillVersion {
   hash: string;
   artifactUrl: string;
   size: number;
-  scannedAt: Date | null;
+  risk: RiskLevel | null;
+  summary: string | null;
+  analysis: AnalysisResult | null;
+  analyzedAt: Date | null;
   scanStatus: ScanStatus;
-  createdAt: Date;
-}
-
-export interface Permission {
-  id: string;
-  versionId: string;
-  type: PermissionType;
-  access: AccessLevel;
-  details: string | null;
-}
-
-export interface ScanFinding {
-  rule: string;
-  severity: RiskLevel;
-  message: string;
-  line?: number;
-  column?: number;
-  snippet?: string;
-}
-
-export interface Scan {
-  id: string;
-  versionId: string;
-  engine: ScanEngine;
-  status: ScanStatus;
-  findings: ScanFinding[];
-  startedAt: Date;
-  completedAt: Date | null;
   createdAt: Date;
 }
 
@@ -66,11 +70,6 @@ export interface SkillWithLatestVersion extends Skill {
 
 export interface SkillDetail extends Skill {
   versions: SkillVersion[];
-}
-
-export interface VersionDetail extends SkillVersion {
-  permissions: Permission[];
-  scans: Scan[];
 }
 
 // CLI types

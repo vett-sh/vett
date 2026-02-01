@@ -1,5 +1,5 @@
 import { loadConfig } from './config.js';
-import type { Skill, SkillVersion, SkillDetail, VersionDetail } from '@vett/core';
+import type { Skill, SkillDetail, SkillVersion } from '@vett/core';
 
 interface SearchResponse {
   skills: Skill[];
@@ -56,11 +56,11 @@ export async function getSkillByRef(
   return fetchJson<SkillDetail>(`/api/skills/${skill.id}`);
 }
 
-export async function getVersionDetail(
+export async function getVersion(
   skillId: string,
   version: string
-): Promise<VersionDetail> {
-  return fetchJson<VersionDetail>(`/api/skills/${skillId}/versions/${version}`);
+): Promise<SkillVersion> {
+  return fetchJson<SkillVersion>(`/api/skills/${skillId}/versions/${version}`);
 }
 
 export async function downloadSkill(

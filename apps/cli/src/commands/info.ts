@@ -1,6 +1,6 @@
-import { getSkillByRef, getVersionDetail } from '../api.js';
+import { getSkillByRef, getVersion } from '../api.js';
 import { getInstalledSkill } from '../config.js';
-import type { RiskLevel } from '@vett/core';
+import type { RiskLevel, AnalysisResult, SecurityFlag } from '@vett/core';
 
 function parseSkillRef(ref: string): { owner: string; repo: string; name: string } {
   const parts = ref.split('/');
@@ -10,14 +10,15 @@ function parseSkillRef(ref: string): { owner: string; repo: string; name: string
   return { owner: parts[0], repo: parts[1], name: parts[2] };
 }
 
-function severityColor(severity: RiskLevel): string {
+function riskColor(risk: RiskLevel): string {
   const colors: Record<RiskLevel, string> = {
+    none: '\x1b[32m',    // green
     low: '\x1b[32m',     // green
     medium: '\x1b[33m',  // yellow
     high: '\x1b[91m',    // bright red
     critical: '\x1b[31m', // red
   };
-  return colors[severity] || '';
+  return colors[risk] || '';
 }
 
 const reset = '\x1b[0m';
@@ -64,37 +65,58 @@ export async function info(skillRef: string): Promise<void> {
   const latestVersion = skill.versions[0];
   if (latestVersion) {
     console.log(`${bold}Latest Version: ${latestVersion.version}${reset}`);
-    console.log(`${dim}Scan status:${reset} ${latestVersion.scanStatus}`);
-    console.log();
 
-    // Fetch full version details with permissions and scans
+    // Fetch full version with analysis
     try {
-      const versionDetail = await getVersionDetail(skill.id, latestVersion.version);
+      const version = await getVersion(skill.id, latestVersion.version);
 
-      // Permissions
-      if (versionDetail.permissions.length > 0) {
-        console.log(`${bold}Permissions:${reset}`);
-        for (const perm of versionDetail.permissions) {
-          console.log(`  ${perm.type}: ${perm.access}${perm.details ? ` (${perm.details})` : ''}`);
-        }
-        console.log();
+      // Risk level
+      if (version.risk) {
+        const color = riskColor(version.risk);
+        console.log(`${dim}Risk:${reset} ${color}${version.risk.toUpperCase()}${reset}`);
       }
 
-      // Scan findings
-      for (const scan of versionDetail.scans) {
-        console.log(`${bold}Security Scan (${scan.engine}):${reset} ${scan.status}`);
-        if (Array.isArray(scan.findings) && scan.findings.length > 0) {
-          for (const finding of scan.findings as Array<{ rule: string; severity: RiskLevel; message: string }>) {
-            const color = severityColor(finding.severity);
-            console.log(`  ${color}[${finding.severity.toUpperCase()}]${reset} ${finding.rule}: ${finding.message}`);
+      // Summary
+      if (version.summary) {
+        console.log(`\n${version.summary}`);
+      }
+
+      // Analysis details
+      const analysis = version.analysis as AnalysisResult | null;
+      if (analysis) {
+        // Permissions
+        const hasPerms =
+          analysis.permissions.filesystem.length > 0 ||
+          analysis.permissions.network.length > 0 ||
+          analysis.permissions.env.length > 0;
+
+        if (hasPerms) {
+          console.log(`\n${bold}Permissions:${reset}`);
+          if (analysis.permissions.filesystem.length > 0) {
+            console.log(`  ${dim}Filesystem:${reset} ${analysis.permissions.filesystem.join(', ')}`);
           }
-        } else {
-          console.log('  No issues found');
+          if (analysis.permissions.network.length > 0) {
+            console.log(`  ${dim}Network:${reset} ${analysis.permissions.network.join(', ')}`);
+          }
+          if (analysis.permissions.env.length > 0) {
+            console.log(`  ${dim}Env:${reset} ${analysis.permissions.env.join(', ')}`);
+          }
         }
-        console.log();
+
+        // Security flags
+        if (analysis.flags.length > 0) {
+          console.log(`\n${bold}Security Flags:${reset}`);
+          for (const flag of analysis.flags as SecurityFlag[]) {
+            const color = riskColor(flag.severity);
+            console.log(`  ${color}[${flag.severity.toUpperCase()}]${reset} ${flag.type}: ${flag.evidence}`);
+          }
+        }
       }
+      console.log();
     } catch {
       // Version details not available
+      console.log(`${dim}Scan status:${reset} ${latestVersion.scanStatus}`);
+      console.log();
     }
   }
 
@@ -103,7 +125,8 @@ export async function info(skillRef: string): Promise<void> {
     console.log(`${bold}All Versions:${reset}`);
     for (const v of skill.versions.slice(0, 10)) {
       const date = new Date(v.createdAt).toLocaleDateString();
-      console.log(`  ${v.version} ${dim}(${date})${reset} - ${v.scanStatus}`);
+      const riskBadge = v.risk ? ` ${riskColor(v.risk)}[${v.risk}]${reset}` : '';
+      console.log(`  ${v.version} ${dim}(${date})${reset}${riskBadge}`);
     }
     if (skill.versions.length > 10) {
       console.log(`  ${dim}... and ${skill.versions.length - 10} more${reset}`);
