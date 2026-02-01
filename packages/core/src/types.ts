@@ -43,6 +43,7 @@ export interface Skill {
   name: string;
   description: string | null;
   source: SkillSource;
+  sourceUrl: string | null;
   installCount: number;
   createdAt: Date;
   updatedAt: Date;

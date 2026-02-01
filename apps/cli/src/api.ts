@@ -36,7 +36,7 @@ export async function searchSkills(query?: string): Promise<Skill[]> {
   }
   params.set('limit', '20');
 
-  const response = await fetchJson<SearchResponse>(`/api/skills?${params}`);
+  const response = await fetchJson<SearchResponse>(`/api/v1/skills?${params}`);
   return response.skills;
 }
 
@@ -53,11 +53,11 @@ export async function getSkillByRef(
     return null;
   }
 
-  return fetchJson<SkillDetail>(`/api/skills/${skill.id}`);
+  return fetchJson<SkillDetail>(`/api/v1/skills/${skill.id}`);
 }
 
 export async function getVersion(skillId: string, version: string): Promise<SkillVersion> {
-  return fetchJson<SkillVersion>(`/api/skills/${skillId}/versions/${version}`);
+  return fetchJson<SkillVersion>(`/api/v1/skills/${skillId}/versions/${version}`);
 }
 
 export async function downloadSkill(
@@ -66,7 +66,7 @@ export async function downloadSkill(
 ): Promise<{ url: string; content: ArrayBuffer }> {
   const baseUrl = getBaseUrl();
   const ref = version ? `${skillId}@${version}` : skillId;
-  const response = await fetch(`${baseUrl}/api/download/${encodeURIComponent(ref)}`, {
+  const response = await fetch(`${baseUrl}/api/v1/download/${encodeURIComponent(ref)}`, {
     redirect: 'follow',
   });
 
