@@ -12,5 +12,12 @@ export default defineConfig({
   banner: {
     js: '#!/usr/bin/env node',
   },
-  noExternal: ['@vett/core', '@clack/prompts', '@clack/core', 'picocolors', 'sisteransi', 'is-unicode-supported'],
+  noExternal: [
+    '@vett/core',
+    '@clack/prompts',
+    '@clack/core',
+    'picocolors',
+    'sisteransi',
+    'is-unicode-supported',
+  ],
 });

@@ -41,11 +41,19 @@ function formatSkillInfo(job: JobResponse): string {
   const lines: string[] = [];
 
   // Header
-  const verdictIcon = verdict === 'verified' ? pc.green('✓') : verdict === 'review' ? pc.yellow('⚠') : pc.red('⛔');
-  const verdictLabel = verdict === 'verified' ? pc.green('Verified') : verdict === 'review' ? pc.yellow('Review') : pc.red('Blocked');
+  const verdictIcon =
+    verdict === 'verified' ? pc.green('✓') : verdict === 'review' ? pc.yellow('⚠') : pc.red('⛔');
+  const verdictLabel =
+    verdict === 'verified'
+      ? pc.green('Verified')
+      : verdict === 'review'
+        ? pc.yellow('Review')
+        : pc.red('Blocked');
 
   lines.push(`${pc.bold(result.skill.name)}`);
-  lines.push(`${verdictIcon} ${verdictLabel} ${pc.dim('·')} ${pc.dim(`${result.skill.owner}/${result.skill.repo}`)}`);
+  lines.push(
+    `${verdictIcon} ${verdictLabel} ${pc.dim('·')} ${pc.dim(`${result.skill.owner}/${result.skill.repo}`)}`
+  );
 
   // Show summary or description
   const summary = version.summary || result.skill.description;
@@ -64,7 +72,9 @@ function formatSkillInfo(job: JobResponse): string {
     const env = analysis.permissions.env;
 
     lines.push(`  ${pc.dim('Filesystem:')} ${fs.length > 0 ? fs.join(', ') : pc.dim('none')}`);
-    lines.push(`  ${pc.dim('Network:')}    ${net.length > 0 ? net.slice(0, 2).join(', ') + (net.length > 2 ? ` +${net.length - 2} more` : '') : pc.dim('none')}`);
+    lines.push(
+      `  ${pc.dim('Network:')}    ${net.length > 0 ? net.slice(0, 2).join(', ') + (net.length > 2 ? ` +${net.length - 2} more` : '') : pc.dim('none')}`
+    );
     lines.push(`  ${pc.dim('Env vars:')}   ${env.length > 0 ? env.join(', ') : pc.dim('none')}`);
   } else {
     lines.push(`  ${pc.dim('(no analysis available)')}`);
@@ -72,7 +82,7 @@ function formatSkillInfo(job: JobResponse): string {
 
   // Security findings (sorted by severity)
   if (analysis && analysis.flags.length > 0) {
-    const severityOrder = { high: 0, medium: 1, low: 2 };
+    const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     const sortedFlags = [...analysis.flags].sort(
       (a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3)
     );
@@ -80,8 +90,13 @@ function formatSkillInfo(job: JobResponse): string {
     lines.push('');
     lines.push(pc.bold('Security Findings'));
     for (const flag of sortedFlags.slice(0, 4)) {
-      const severityColor = flag.severity === 'high' ? pc.red : flag.severity === 'medium' ? pc.yellow : pc.dim;
-      const icon = flag.severity === 'high' ? '!' : '·';
+      const isCriticalOrHigh = flag.severity === 'critical' || flag.severity === 'high';
+      const severityColor = isCriticalOrHigh
+        ? pc.red
+        : flag.severity === 'medium'
+          ? pc.yellow
+          : pc.dim;
+      const icon = isCriticalOrHigh ? '!' : '·';
       lines.push(`  ${severityColor(`${icon} [${flag.severity.toUpperCase()}]`)} ${flag.type}`);
     }
     if (sortedFlags.length > 4) {
@@ -91,7 +106,9 @@ function formatSkillInfo(job: JobResponse): string {
 
   // Metadata
   lines.push('');
-  lines.push(`${pc.dim('Size:')} ${formatBytes(version.size)}  ${pc.dim('Version:')} ${version.version}`);
+  lines.push(
+    `${pc.dim('Size:')} ${formatBytes(version.size)}  ${pc.dim('Version:')} ${version.version}`
+  );
 
   return lines.join('\n');
 }
@@ -234,7 +251,9 @@ export async function add(url: string, options: { force?: boolean; yes?: boolean
   });
   s.stop('Installed');
 
-  p.log.success(`${result.skill.owner}/${result.skill.repo}/${result.skill.name}@${result.version.version}`);
+  p.log.success(
+    `${result.skill.owner}/${result.skill.repo}/${result.skill.name}@${result.version.version}`
+  );
   p.log.info(`Location: ${pc.dim(skillDir)}`);
 
   p.outro(pc.green('Done'));
