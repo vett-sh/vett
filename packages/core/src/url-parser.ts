@@ -14,8 +14,10 @@ export interface ParsedSkillUrl {
   owner?: string;
   /** Repository name (for git hosts) */
   repo?: string;
-  /** Skill path within repo */
+  /** Normalized skill name (for display/ID) */
   skill?: string;
+  /** Full path within repo (for fetching) */
+  path?: string;
   /** Branch or tag ref */
   ref?: string;
   /** Original URL for provenance */
@@ -141,7 +143,10 @@ function parseGitHostUrl(
     }
   }
 
-  // Normalize skill path
+  // Keep original path for fetching (lowercase, .md stripped)
+  const path = skillPath.length > 0 ? skillPath.map((p) => p.replace(/\.md$/i, '')).join('/') : undefined;
+
+  // Normalize skill path for ID (strips 'skills/' prefix)
   const skill = normalizeSkillPath(skillPath);
 
   // Build canonical ID
@@ -157,6 +162,7 @@ function parseGitHostUrl(
     owner,
     repo,
     skill: skill || undefined,
+    path,
     ref,
     sourceUrl,
   };
