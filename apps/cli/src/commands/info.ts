@@ -1,8 +1,12 @@
-import { getSkillByRef, getVersion } from '../api.js';
-import { getInstalledSkill } from '../config.js';
+import { getSkillByRef, getVersion } from '../api';
+import { getInstalledSkill } from '../config';
 import type { RiskLevel, AnalysisResult, SecurityFlag } from '@vett/core';
 
-function parseSkillRef(ref: string): { owner: string; repo: string; name: string } {
+function parseSkillRef(ref: string): {
+  owner: string;
+  repo: string;
+  name: string;
+} {
   const parts = ref.split('/');
   if (parts.length !== 3) {
     throw new Error('Invalid skill reference. Format: owner/repo/skill');
@@ -12,10 +16,10 @@ function parseSkillRef(ref: string): { owner: string; repo: string; name: string
 
 function riskColor(risk: RiskLevel): string {
   const colors: Record<RiskLevel, string> = {
-    none: '\x1b[32m',    // green
-    low: '\x1b[32m',     // green
-    medium: '\x1b[33m',  // yellow
-    high: '\x1b[91m',    // bright red
+    none: '\x1b[32m', // green
+    low: '\x1b[32m', // green
+    medium: '\x1b[33m', // yellow
+    high: '\x1b[91m', // bright red
     critical: '\x1b[31m', // red
   };
   return colors[risk] || '';
@@ -93,7 +97,9 @@ export async function info(skillRef: string): Promise<void> {
         if (hasPerms) {
           console.log(`\n${bold}Permissions:${reset}`);
           if (analysis.permissions.filesystem.length > 0) {
-            console.log(`  ${dim}Filesystem:${reset} ${analysis.permissions.filesystem.join(', ')}`);
+            console.log(
+              `  ${dim}Filesystem:${reset} ${analysis.permissions.filesystem.join(', ')}`
+            );
           }
           if (analysis.permissions.network.length > 0) {
             console.log(`  ${dim}Network:${reset} ${analysis.permissions.network.join(', ')}`);
@@ -108,7 +114,9 @@ export async function info(skillRef: string): Promise<void> {
           console.log(`\n${bold}Security Flags:${reset}`);
           for (const flag of analysis.flags as SecurityFlag[]) {
             const color = riskColor(flag.severity);
-            console.log(`  ${color}[${flag.severity.toUpperCase()}]${reset} ${flag.type}: ${flag.evidence}`);
+            console.log(
+              `  ${color}[${flag.severity.toUpperCase()}]${reset} ${flag.type}: ${flag.evidence}`
+            );
           }
         }
       }

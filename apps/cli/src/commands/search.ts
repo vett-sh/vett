@@ -1,4 +1,4 @@
-import { searchSkills } from '../api.js';
+import { searchSkills } from '../api';
 
 export async function search(query: string): Promise<void> {
   console.log(`Searching for "${query}"...\n`);

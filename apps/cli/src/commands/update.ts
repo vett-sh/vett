@@ -1,6 +1,6 @@
-import { loadConfig, getInstalledSkill } from '../config.js';
-import { getSkillByRef } from '../api.js';
-import { install } from './install.js';
+import { loadConfig, getInstalledSkill } from '../config';
+import { getSkillByRef } from '../api';
+import { install } from './install';
 
 export async function update(skillRef?: string): Promise<void> {
   const config = loadConfig();

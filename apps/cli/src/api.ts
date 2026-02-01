@@ -1,4 +1,4 @@
-import { loadConfig } from './config.js';
+import { loadConfig } from './config';
 import type { Skill, SkillDetail, SkillVersion } from '@vett/core';
 
 interface SearchResponse {
@@ -20,7 +20,9 @@ async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`);
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
+    const errorBody = (await response.json().catch(() => ({ error: 'Unknown error' }))) as {
+      error?: string;
+    };
     throw new Error(errorBody.error || `HTTP ${response.status}`);
   }
 
@@ -45,9 +47,7 @@ export async function getSkillByRef(
 ): Promise<SkillDetail | null> {
   // First search for the skill to get its ID
   const skills = await searchSkills(`${owner}/${repo}/${name}`);
-  const skill = skills.find(
-    (s) => s.owner === owner && s.repo === repo && s.name === name
-  );
+  const skill = skills.find((s) => s.owner === owner && s.repo === repo && s.name === name);
 
   if (!skill) {
     return null;
@@ -56,10 +56,7 @@ export async function getSkillByRef(
   return fetchJson<SkillDetail>(`/api/skills/${skill.id}`);
 }
 
-export async function getVersion(
-  skillId: string,
-  version: string
-): Promise<SkillVersion> {
+export async function getVersion(skillId: string, version: string): Promise<SkillVersion> {
   return fetchJson<SkillVersion>(`/api/skills/${skillId}/versions/${version}`);
 }
 

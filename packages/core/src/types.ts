@@ -1,4 +1,4 @@
-import type { ScanStatus, SkillSource, RiskLevel } from './constants.js';
+import type { ScanStatus, SkillSource, RiskLevel } from './constants';
 
 // Issue types for security analysis
 export const ISSUE_TYPES = [

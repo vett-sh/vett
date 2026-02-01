@@ -1,4 +1,4 @@
-import { loadConfig } from '../config.js';
+import { loadConfig } from '../config';
 
 const dim = '\x1b[2m';
 const reset = '\x1b[0m';

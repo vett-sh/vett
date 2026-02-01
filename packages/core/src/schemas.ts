@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SCAN_STATUSES, SKILL_SOURCES, RISK_LEVELS } from './constants.js';
+import { SCAN_STATUSES, SKILL_SOURCES, RISK_LEVELS } from './constants';
 
 export const skillSchema = z.object({
   id: z.string().uuid(),
@@ -43,10 +43,12 @@ export const skillIdentifierSchema = z.object({
   skill: z.string().min(1),
 });
 
-export const skillRefSchema = z.string().regex(
-  /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+(@[a-zA-Z0-9._-]+)?$/,
-  'Invalid skill reference. Format: owner/repo/skill[@version]'
-);
+export const skillRefSchema = z
+  .string()
+  .regex(
+    /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+(@[a-zA-Z0-9._-]+)?$/,
+    'Invalid skill reference. Format: owner/repo/skill[@version]'
+  );
 
 // Type exports from schemas
 export type SkillInput = z.infer<typeof skillSchema>;

@@ -1,10 +1,15 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { getSkillByRef, downloadSkill } from '../api.js';
-import { getSkillPath, addInstalledSkill, getInstalledSkill } from '../config.js';
+import { getSkillByRef, downloadSkill } from '../api';
+import { getSkillPath, addInstalledSkill, getInstalledSkill } from '../config';
 import { skillRefSchema } from '@vett/core';
 
-function parseSkillRef(ref: string): { owner: string; repo: string; name: string; version?: string } {
+function parseSkillRef(ref: string): {
+  owner: string;
+  repo: string;
+  name: string;
+  version?: string;
+} {
   // Parse owner/repo/skill[@version]
   const atIndex = ref.lastIndexOf('@');
   let skillPath: string;

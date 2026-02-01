@@ -1,15 +1,12 @@
 #!/usr/bin/env node
 import { program } from 'commander';
-import { install } from './commands/install.js';
-import { search } from './commands/search.js';
-import { info } from './commands/info.js';
-import { list } from './commands/list.js';
-import { update } from './commands/update.js';
+import { install } from './commands/install';
+import { search } from './commands/search';
+import { info } from './commands/info';
+import { list } from './commands/list';
+import { update } from './commands/update';
 
-program
-  .name('vett')
-  .description('CLI for the Vett secure agent skill registry')
-  .version('0.1.0');
+program.name('vett').description('CLI for the Vett secure agent skill registry').version('0.1.0');
 
 program
   .command('install <skill>')
@@ -17,20 +14,11 @@ program
   .option('-f, --force', 'Force reinstall if already installed')
   .action(install);
 
-program
-  .command('search <query>')
-  .description('Search for skills')
-  .action(search);
+program.command('search <query>').description('Search for skills').action(search);
 
-program
-  .command('info <skill>')
-  .description('Show detailed information about a skill')
-  .action(info);
+program.command('info <skill>').description('Show detailed information about a skill').action(info);
 
-program
-  .command('list')
-  .description('List installed skills')
-  .action(list);
+program.command('list').description('List installed skills').action(list);
 
 program
   .command('update [skill]')
