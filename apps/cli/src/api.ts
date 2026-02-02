@@ -88,6 +88,30 @@ async function fetchJson<T>(path: string, options: RequestInit = {}): Promise<T>
   return response.json() as Promise<T>;
 }
 
+async function fetchJsonOrNull<T>(path: string, options: RequestInit = {}): Promise<T | null> {
+  const baseUrl = getBaseUrl();
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: {
+      ...getHeaders(),
+      ...options.headers,
+    },
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const errorBody = (await response.json().catch(() => ({ error: 'Unknown error' }))) as {
+      error?: string;
+    };
+    throw new Error(errorBody.error || `HTTP ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
 export async function searchSkills(query?: string): Promise<Skill[]> {
   const params = new URLSearchParams();
   if (query) {
@@ -104,15 +128,13 @@ export async function getSkillByRef(
   repo: string,
   name: string
 ): Promise<SkillDetail | null> {
-  // First search for the skill to get its ID
-  const skills = await searchSkills(`${owner}/${repo}/${name}`);
-  const skill = skills.find((s) => s.owner === owner && s.repo === repo && s.name === name);
+  const params = new URLSearchParams({ owner, repo, name });
+  return fetchJsonOrNull<SkillDetail>(`/api/v1/skills?${params}`);
+}
 
-  if (!skill) {
-    return null;
-  }
-
-  return fetchJson<SkillDetail>(`/api/v1/skills/${skill.id}`);
+export async function getSkillByUrl(url: string): Promise<SkillDetail | null> {
+  const params = new URLSearchParams({ url });
+  return fetchJsonOrNull<SkillDetail>(`/api/v1/skills?${params}`);
 }
 
 export async function getVersion(skillId: string, version: string): Promise<SkillVersion> {

@@ -1,6 +1,6 @@
 import { loadConfig, getInstalledSkill } from '../config';
 import { getSkillByRef } from '../api';
-import { install } from './install';
+import { add } from './add';
 
 export async function update(skillRef?: string): Promise<void> {
   const config = loadConfig();
@@ -70,7 +70,7 @@ async function updateSkill(
     }
 
     console.log(`${ref}: updating ${currentVersion} -> ${latestVersion}`);
-    await install(ref, { force: true });
+    await add(ref, { force: true, yes: true });
     return true;
   } catch (error) {
     console.error(`${ref}: failed to update - ${(error as Error).message}`);

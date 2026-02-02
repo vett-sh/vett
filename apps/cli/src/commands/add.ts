@@ -2,10 +2,16 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { ingestSkill, waitForJob, downloadArtifact, type JobResponse } from '../api';
+import { ingestSkill, waitForJob, downloadArtifact, getSkillByRef, getSkillByUrl } from '../api';
 import { getSkillDir, addInstalledSkill, getInstalledSkill } from '../config';
-import { skillManifestSchema } from '@vett/core';
-import type { AnalysisResult, RiskLevel, SkillManifest } from '@vett/core';
+import { skillManifestSchema, skillRefSchema } from '@vett/core';
+import type {
+  AnalysisResult,
+  RiskLevel,
+  SkillManifest,
+  SkillDetail,
+  SkillVersion,
+} from '@vett/core';
 
 /**
  * Format bytes to human readable
@@ -28,9 +34,30 @@ function getVerdict(risk: RiskLevel | null): 'verified' | 'review' | 'blocked' {
 /**
  * Format the skill info for display
  */
-function formatSkillInfo(job: JobResponse): string {
-  const result = job.result!;
-  const version = result.version;
+interface VersionInfo {
+  version: string;
+  hash: string;
+  artifactUrl: string;
+  size: number;
+  risk: RiskLevel | null;
+  summary: string | null;
+  analysis: AnalysisResult | null;
+}
+
+interface SkillInfo {
+  owner: string;
+  repo: string;
+  name: string;
+  description: string | null;
+}
+
+interface ResolvedResult {
+  skill: SkillInfo;
+  version: VersionInfo;
+}
+
+function formatSkillInfo(result: ResolvedResult): string {
+  const { skill, version } = result;
   const analysis = version.analysis;
   const verdict = getVerdict(version.risk as RiskLevel);
 
@@ -46,13 +73,13 @@ function formatSkillInfo(job: JobResponse): string {
         ? pc.yellow('Review')
         : pc.red('Blocked');
 
-  lines.push(`${pc.bold(result.skill.name)}`);
+  lines.push(`${pc.bold(skill.name)}`);
   lines.push(
-    `${verdictIcon} ${verdictLabel} ${pc.dim('·')} ${pc.dim(`${result.skill.owner}/${result.skill.repo}`)}`
+    `${verdictIcon} ${verdictLabel} ${pc.dim('·')} ${pc.dim(`${skill.owner}/${skill.repo}`)}`
   );
 
   // Show summary or description
-  const summary = version.summary || result.skill.description;
+  const summary = version.summary || skill.description;
   if (summary) {
     lines.push('');
     lines.push(pc.dim(summary));
@@ -122,58 +149,114 @@ function installSkillFiles(manifest: SkillManifest, skillDir: string): void {
   }
 }
 
-export async function add(url: string, options: { force?: boolean; yes?: boolean }): Promise<void> {
+export async function add(
+  input: string,
+  options: { force?: boolean; yes?: boolean }
+): Promise<void> {
   p.intro(pc.bgCyan(pc.black(' vett add ')));
 
   const s = p.spinner();
 
-  // Submit for ingestion
-  s.start('Submitting for analysis');
-  let ingestResponse;
+  const parsed = parseAddInput(input);
+  let resolved: ResolvedResult | null = null;
+  let ingestUrl = input;
+
+  s.start('Checking registry');
   try {
-    ingestResponse = await ingestSkill(url);
+    if (parsed.kind === 'ref') {
+      const skill = await getSkillByRef(parsed.owner, parsed.repo, parsed.name);
+      if (skill) {
+        resolved = {
+          skill: toSkillInfo(skill),
+          version: toVersionInfo(selectVersion(skill, parsed.version)),
+        };
+      } else {
+        ingestUrl = `https://github.com/${parsed.owner}/${parsed.repo}/tree/${parsed.version || 'main'}/${parsed.name}`;
+      }
+    } else {
+      const skill = await getSkillByUrl(parsed.url);
+      if (skill) {
+        resolved = { skill: toSkillInfo(skill), version: toVersionInfo(selectVersion(skill)) };
+      }
+    }
   } catch (error) {
-    s.stop('Submission failed');
+    s.stop('Registry lookup failed');
     p.log.error((error as Error).message);
     p.outro(pc.red('Installation failed'));
     process.exit(1);
   }
-  s.stop('Submitted');
 
-  // Poll for completion
-  s.start('Analyzing skill');
-  let job: JobResponse;
-  try {
-    job = await waitForJob(ingestResponse.jobId, {
-      onProgress: (status) => {
-        if (status === 'processing') {
-          s.message('Analyzing skill');
-        }
+  if (resolved) {
+    s.stop('Found in registry');
+  } else {
+    s.stop('Not found in registry');
+
+    // Submit for ingestion
+    s.start('Submitting for analysis');
+    let ingestResponse;
+    try {
+      ingestResponse = await ingestSkill(ingestUrl);
+    } catch (error) {
+      s.stop('Submission failed');
+      p.log.error((error as Error).message);
+      p.outro(pc.red('Installation failed'));
+      process.exit(1);
+    }
+    s.stop('Submitted');
+
+    // Poll for completion
+    s.start('Analyzing skill');
+    let job;
+    try {
+      job = await waitForJob(ingestResponse.jobId, {
+        onProgress: (status) => {
+          if (status === 'processing') {
+            s.message('Analyzing skill');
+          }
+        },
+      });
+    } catch (error) {
+      s.stop('Analysis failed');
+      p.log.error((error as Error).message);
+      p.outro(pc.red('Installation failed'));
+      process.exit(1);
+    }
+
+    // Handle failure
+    if (job.status === 'failed') {
+      s.stop('Analysis failed');
+      p.log.error(job.error || 'Unknown error');
+      p.outro(pc.red('Installation failed'));
+      process.exit(1);
+    }
+
+    s.stop('Analysis complete');
+
+    const jobResult = job.result!;
+    resolved = {
+      skill: {
+        owner: jobResult.skill.owner,
+        repo: jobResult.skill.repo,
+        name: jobResult.skill.name,
+        description: jobResult.skill.description,
       },
-    });
-  } catch (error) {
-    s.stop('Analysis failed');
-    p.log.error((error as Error).message);
-    p.outro(pc.red('Installation failed'));
-    process.exit(1);
+      version: {
+        version: jobResult.version.version,
+        hash: jobResult.version.hash,
+        artifactUrl: jobResult.version.artifactUrl,
+        size: jobResult.version.size,
+        risk: jobResult.version.risk as RiskLevel | null,
+        summary: jobResult.version.summary,
+        analysis: jobResult.version.analysis,
+      },
+    };
   }
 
-  // Handle failure
-  if (job.status === 'failed') {
-    s.stop('Analysis failed');
-    p.log.error(job.error || 'Unknown error');
-    p.outro(pc.red('Installation failed'));
-    process.exit(1);
-  }
-
-  s.stop('Analysis complete');
-
-  const result = job.result!;
-  const verdict = getVerdict(result.version.risk as RiskLevel);
+  const verdict = getVerdict(resolved.version.risk as RiskLevel);
 
   // Display skill info
-  const skillRef = `${result.skill.owner}/${result.skill.repo}/${result.skill.name}`;
-  p.note(formatSkillInfo(job), skillRef);
+  const skillRef = `${resolved.skill.owner}/${resolved.skill.repo}/${resolved.skill.name}`;
+  p.note(formatSkillInfo(resolved), skillRef);
 
   // Block high-risk skills
   if (verdict === 'blocked') {
@@ -204,7 +287,11 @@ export async function add(url: string, options: { force?: boolean; yes?: boolean
   }
 
   // Check if already installed
-  const existing = getInstalledSkill(result.skill.owner, result.skill.repo, result.skill.name);
+  const existing = getInstalledSkill(
+    resolved.skill.owner,
+    resolved.skill.repo,
+    resolved.skill.name
+  );
   if (existing && !options.force) {
     const replaceResult = await p.confirm({
       message: `Already installed (${existing.version}). Replace?`,
@@ -221,7 +308,7 @@ export async function add(url: string, options: { force?: boolean; yes?: boolean
   s.start('Downloading and verifying');
   let manifestContent: ArrayBuffer;
   try {
-    manifestContent = await downloadArtifact(result.version.artifactUrl, result.version.hash);
+    manifestContent = await downloadArtifact(resolved.version.artifactUrl, resolved.version.hash);
   } catch (error) {
     s.stop('Download failed');
     p.log.error((error as Error).message);
@@ -243,24 +330,90 @@ export async function add(url: string, options: { force?: boolean; yes?: boolean
     process.exit(1);
   }
   const manifest = manifestResult.data as SkillManifest;
-  const skillDir = getSkillDir(result.skill.owner, result.skill.repo, result.skill.name);
+  const skillDir = getSkillDir(resolved.skill.owner, resolved.skill.repo, resolved.skill.name);
   installSkillFiles(manifest, skillDir);
 
   // Update config
   addInstalledSkill({
-    owner: result.skill.owner,
-    repo: result.skill.repo,
-    name: result.skill.name,
-    version: result.version.version,
+    owner: resolved.skill.owner,
+    repo: resolved.skill.repo,
+    name: resolved.skill.name,
+    version: resolved.version.version,
     installedAt: new Date(),
     path: skillDir,
   });
   s.stop('Installed');
 
   p.log.success(
-    `${result.skill.owner}/${result.skill.repo}/${result.skill.name}@${result.version.version}`
+    `${resolved.skill.owner}/${resolved.skill.repo}/${resolved.skill.name}@${resolved.version.version}`
   );
   p.log.info(`Location: ${pc.dim(skillDir)}`);
 
   p.outro(pc.green('Done'));
+}
+
+function selectVersion(skill: SkillDetail, version?: string): SkillVersion {
+  if (version) {
+    const found = skill.versions.find((candidate) => candidate.version === version);
+    if (!found) {
+      throw new Error(`Version ${version} not found in registry`);
+    }
+    return found;
+  }
+
+  if (!skill.versions[0]) {
+    throw new Error('No versions available for this skill');
+  }
+
+  return skill.versions[0];
+}
+
+function toSkillInfo(skill: SkillDetail): SkillInfo {
+  return {
+    owner: skill.owner,
+    repo: skill.repo,
+    name: skill.name,
+    description: skill.description,
+  };
+}
+
+function toVersionInfo(version: SkillVersion): VersionInfo {
+  return {
+    version: version.version,
+    hash: version.hash,
+    artifactUrl: version.artifactUrl,
+    size: version.size,
+    risk: version.risk as RiskLevel | null,
+    summary: version.summary,
+    analysis: version.analysis,
+  };
+}
+
+type AddInput =
+  | { kind: 'ref'; owner: string; repo: string; name: string; version?: string }
+  | { kind: 'url'; url: string };
+
+export function parseAddInput(input: string): AddInput {
+  const refResult = skillRefSchema.safeParse(input);
+  if (refResult.success) {
+    const atIndex = input.lastIndexOf('@');
+    let skillPath = input;
+    let version: string | undefined;
+
+    if (atIndex > 0) {
+      skillPath = input.slice(0, atIndex);
+      version = input.slice(atIndex + 1);
+    }
+
+    const parts = skillPath.split('/');
+    return {
+      kind: 'ref',
+      owner: parts[0],
+      repo: parts[1],
+      name: parts[2],
+      version,
+    };
+  }
+
+  return { kind: 'url', url: input };
 }
