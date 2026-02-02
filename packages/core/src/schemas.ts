@@ -34,11 +34,16 @@ export const skillVersionSchema = z.object({
   createdAt: z.coerce.date(),
 });
 
+// Sort options for skills search
+export const SORT_OPTIONS = ['installs', 'trending', 'newest'] as const;
+export type SortOption = (typeof SORT_OPTIONS)[number];
+
 // Query schemas
 export const searchQuerySchema = z.object({
   q: z.string().optional(),
   source: z.enum(SKILL_SOURCES).optional(),
   risk: z.enum(RISK_LEVELS).optional(),
+  sortBy: z.enum(SORT_OPTIONS).optional().default('installs'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
 });
