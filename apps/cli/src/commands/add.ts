@@ -4,6 +4,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { ingestSkill, waitForJob, downloadArtifact, type JobResponse } from '../api';
 import { getSkillDir, addInstalledSkill, getInstalledSkill } from '../config';
+import { skillManifestSchema } from '@vett/core';
 import type { AnalysisResult, RiskLevel, SkillManifest } from '@vett/core';
 
 /**
@@ -231,7 +232,17 @@ export async function add(url: string, options: { force?: boolean; yes?: boolean
 
   // Parse manifest and install files
   s.start('Installing');
-  const manifest = JSON.parse(Buffer.from(manifestContent).toString('utf-8')) as SkillManifest;
+  const manifestJson = JSON.parse(Buffer.from(manifestContent).toString('utf-8'));
+  const manifestResult = skillManifestSchema.safeParse(manifestJson);
+  if (!manifestResult.success) {
+    s.stop('Invalid manifest');
+    p.log.error(
+      `Skill manifest failed validation: ${manifestResult.error.flatten().formErrors.join(', ')}`
+    );
+    p.outro(pc.red('Installation failed'));
+    process.exit(1);
+  }
+  const manifest = manifestResult.data as SkillManifest;
   const skillDir = getSkillDir(result.skill.owner, result.skill.repo, result.skill.name);
   installSkillFiles(manifest, skillDir);
 
