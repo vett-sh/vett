@@ -8,6 +8,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./manifest-hash": {
+      "types": "./dist/manifest-hash.d.ts",
+      "import": "./dist/manifest-hash.js"
+    },
     "./types": {
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
@@ -32,6 +36,7 @@
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.19.7",
     "typescript": "^5.6.3"
   }
 }

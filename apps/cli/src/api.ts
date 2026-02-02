@@ -1,6 +1,8 @@
-import { createHash } from 'node:crypto';
 import { loadConfig } from './config';
-import type { Skill, SkillDetail, SkillVersion, AnalysisResult } from '@vett/core';
+import { skillManifestSchema } from '@vett/core';
+import { computeManifestHash as computeManifestHashCore } from '@vett/core/manifest-hash';
+import { createHash } from 'node:crypto';
+import type { Skill, SkillDetail, SkillVersion, AnalysisResult, SkillManifest } from '@vett/core';
 
 // CLI version for identification headers
 const CLI_VERSION = '0.1.0';
@@ -201,9 +203,19 @@ export async function downloadArtifact(
   }
 
   const content = await response.arrayBuffer();
+  const text = Buffer.from(content).toString('utf-8');
+  let manifestHash: string | null = null;
+  try {
+    const parsed = JSON.parse(text);
+    const manifestResult = skillManifestSchema.safeParse(parsed);
+    if (manifestResult.success) {
+      manifestHash = computeManifestHashCore(manifestResult.data as SkillManifest);
+    }
+  } catch {
+    // Fall back to raw hash below
+  }
 
-  // Verify hash
-  const actualHash = computeHash(content);
+  const actualHash = manifestHash ?? computeRawHash(content);
   if (actualHash !== expectedHash) {
     throw new Error(`Hash mismatch! Expected ${expectedHash}, got ${actualHash}`);
   }
@@ -214,6 +226,6 @@ export async function downloadArtifact(
 /**
  * Compute SHA256 hash of content
  */
-function computeHash(content: ArrayBuffer): string {
+function computeRawHash(content: ArrayBuffer): string {
   return createHash('sha256').update(Buffer.from(content)).digest('hex');
 }
