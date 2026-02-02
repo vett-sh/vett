@@ -8,7 +8,7 @@ import type { AnalysisResult, RiskLevel } from '@vett/core';
 
 interface SkillManifest {
   entryPoint: string;
-  files: Array<{ path: string; content: string }>;
+  files: Array<{ path: string; content: string; contentType?: string }>;
 }
 
 /**
