@@ -51,8 +51,16 @@ export interface JobResponse {
       risk: string | null;
       summary: string | null;
       analysis: AnalysisResult | null;
+      signatureHash: string | null;
+      signature: string | null;
+      signatureKeyId: string | null;
+      signatureCreatedAt: string | null;
     };
   };
+}
+
+export interface SigningKeysResponse {
+  keys: Array<{ keyId: string; publicKey: string }>;
 }
 
 function getBaseUrl(): string {
@@ -141,6 +149,10 @@ export async function getVersion(skillId: string, version: string): Promise<Skil
   return fetchJson<SkillVersion>(`/api/v1/skills/${skillId}/versions/${version}`);
 }
 
+export async function getSigningKeys(): Promise<SigningKeysResponse> {
+  return fetchJson<SigningKeysResponse>('/api/v1/keys');
+}
+
 export async function downloadSkill(
   skillId: string,
   version?: string
@@ -187,7 +199,7 @@ export async function getJobStatus(jobId: string): Promise<JobResponse> {
  */
 export async function waitForJob(
   jobId: string,
-  options: { interval?: number; timeout?: number; onProgress?: (status: string) => void } = {}
+  options: { interval?: number; timeout?: number; onProgress?: (job: JobResponse) => void } = {}
 ): Promise<JobResponse> {
   const { interval = 1000, timeout = 120000, onProgress } = options;
   const start = Date.now();
@@ -196,7 +208,7 @@ export async function waitForJob(
     const job = await getJobStatus(jobId);
 
     if (onProgress) {
-      onProgress(job.status);
+      onProgress(job);
     }
 
     if (job.status === 'complete' || job.status === 'failed') {

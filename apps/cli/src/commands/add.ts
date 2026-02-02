@@ -4,6 +4,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { ingestSkill, waitForJob, downloadArtifact, getSkillByRef, getSkillByUrl } from '../api';
 import { getSkillDir, addInstalledSkill, getInstalledSkill } from '../config';
+import { verifyManifestOrThrow } from '../signatures';
 import { skillManifestSchema, skillRefSchema } from '@vett/core';
 import type {
   AnalysisResult,
@@ -42,6 +43,10 @@ interface VersionInfo {
   risk: RiskLevel | null;
   summary: string | null;
   analysis: AnalysisResult | null;
+  signatureHash: string | null;
+  signature: string | null;
+  signatureKeyId: string | null;
+  signatureCreatedAt: string | null;
 }
 
 interface SkillInfo {
@@ -151,7 +156,7 @@ function installSkillFiles(manifest: SkillManifest, skillDir: string): void {
 
 export async function add(
   input: string,
-  options: { force?: boolean; yes?: boolean }
+  options: { force?: boolean; yes?: boolean; verify?: boolean }
 ): Promise<void> {
   p.intro(pc.bgCyan(pc.black(' vett add ')));
 
@@ -209,9 +214,11 @@ export async function add(
     let job;
     try {
       job = await waitForJob(ingestResponse.jobId, {
-        onProgress: (status) => {
-          if (status === 'processing') {
+        onProgress: (statusJob) => {
+          if (statusJob.status === 'processing') {
             s.message('Analyzing skill');
+          } else if (statusJob.status === 'pending') {
+            s.message('Waiting for analysis to start');
           }
         },
       });
@@ -231,6 +238,13 @@ export async function add(
     }
 
     s.stop('Analysis complete');
+    if (job.startedAt && job.completedAt) {
+      const durationMs = new Date(job.completedAt).getTime() - new Date(job.startedAt).getTime();
+      if (durationMs > 0) {
+        const seconds = Math.round(durationMs / 1000);
+        p.log.info(pc.dim(`Analysis completed in ${seconds}s`));
+      }
+    }
 
     const jobResult = job.result!;
     resolved = {
@@ -248,6 +262,10 @@ export async function add(
         risk: jobResult.version.risk as RiskLevel | null,
         summary: jobResult.version.summary,
         analysis: jobResult.version.analysis,
+        signatureHash: jobResult.version.signatureHash ?? null,
+        signature: jobResult.version.signature ?? null,
+        signatureKeyId: jobResult.version.signatureKeyId ?? null,
+        signatureCreatedAt: jobResult.version.signatureCreatedAt ?? null,
       },
     };
   }
@@ -317,8 +335,7 @@ export async function add(
   }
   s.stop('Downloaded and verified');
 
-  // Parse manifest and install files
-  s.start('Installing');
+  // Parse manifest
   const manifestJson = JSON.parse(Buffer.from(manifestContent).toString('utf-8'));
   const manifestResult = skillManifestSchema.safeParse(manifestJson);
   if (!manifestResult.success) {
@@ -330,6 +347,27 @@ export async function add(
     process.exit(1);
   }
   const manifest = manifestResult.data as SkillManifest;
+
+  if (options.verify !== false) {
+    s.start('Verifying signature');
+    try {
+      await verifyManifestOrThrow(manifest, resolved.version);
+    } catch (error) {
+      s.stop('Signature verification failed');
+      p.log.error((error as Error).message);
+      p.outro(pc.red('Installation failed'));
+      process.exit(1);
+    }
+    s.stop('Signature verified');
+    const sigHash = resolved.version.signatureHash
+      ? `${resolved.version.signatureHash.slice(0, 8)}…`
+      : 'unknown';
+    const keyId = resolved.version.signatureKeyId ?? 'unknown';
+    p.log.info(pc.dim(`Integrity verified (sha256 ${sigHash} · key ${keyId})`));
+  }
+
+  // Install files
+  s.start('Installing');
   const skillDir = getSkillDir(resolved.skill.owner, resolved.skill.repo, resolved.skill.name);
   installSkillFiles(manifest, skillDir);
 
@@ -386,6 +424,12 @@ function toVersionInfo(version: SkillVersion): VersionInfo {
     risk: version.risk as RiskLevel | null,
     summary: version.summary,
     analysis: version.analysis,
+    signatureHash: version.signatureHash ?? null,
+    signature: version.signature ?? null,
+    signatureKeyId: version.signatureKeyId ?? null,
+    signatureCreatedAt: version.signatureCreatedAt
+      ? new Date(version.signatureCreatedAt).toISOString()
+      : null,
   };
 }
 

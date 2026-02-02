@@ -23,6 +23,10 @@
     "./constants": {
       "types": "./dist/constants.d.ts",
       "import": "./dist/constants.js"
+    },
+    "./manifest-signature": {
+      "types": "./dist/manifest-signature.d.ts",
+      "import": "./dist/manifest-signature.js"
     }
   },
   "scripts": {

@@ -12,6 +12,7 @@ program
   .description('Add a skill from URL or ref (registry-first, then analyze/install)')
   .option('-f, --force', 'Force reinstall if already installed')
   .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--no-verify', 'Skip signature verification')
   .action(add);
 
 program.command('search <query>').description('Search for skills').action(search);
