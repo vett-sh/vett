@@ -4,12 +4,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { ingestSkill, waitForJob, downloadArtifact, type JobResponse } from '../api';
 import { getSkillDir, addInstalledSkill, getInstalledSkill } from '../config';
-import type { AnalysisResult, RiskLevel } from '@vett/core';
-
-interface SkillManifest {
-  entryPoint: string;
-  files: Array<{ path: string; content: string; contentType?: string }>;
-}
+import type { AnalysisResult, RiskLevel, SkillManifest } from '@vett/core';
 
 /**
  * Format bytes to human readable
