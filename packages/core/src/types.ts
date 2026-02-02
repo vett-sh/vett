@@ -59,6 +59,8 @@ export interface SkillVersion {
   risk: RiskLevel | null;
   summary: string | null;
   analysis: AnalysisResult | null;
+  gitRef: string | null;
+  commitSha: string | null;
   analyzedAt: Date | null;
   scanStatus: ScanStatus;
   createdAt: Date;

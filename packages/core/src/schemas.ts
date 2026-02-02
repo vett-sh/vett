@@ -23,6 +23,8 @@ export const skillVersionSchema = z.object({
   risk: z.enum(RISK_LEVELS).nullable(),
   summary: z.string().nullable(),
   analysis: z.unknown().nullable(), // Full AnalysisResult, validated by scanner
+  gitRef: z.string().max(255).nullable(),
+  commitSha: z.string().length(40).nullable(),
   analyzedAt: z.coerce.date().nullable(),
   scanStatus: z.enum(SCAN_STATUSES),
   createdAt: z.coerce.date(),
