@@ -36,13 +36,14 @@ const BASE_MANIFEST: SkillManifest = {
 
 describe('verifyManifestOrThrow', () => {
   it('accepts valid signatures', async () => {
-    const signature = signManifestBytes(serializeManifest(BASE_MANIFEST), {
+    const manifestBytes = serializeManifest(BASE_MANIFEST);
+    const signature = signManifestBytes(manifestBytes, {
       keyId: fixture.keyId,
       privateKey: fixture.privateKeyPem,
     });
 
     await expect(
-      verifyManifestOrThrow(BASE_MANIFEST, {
+      verifyManifestOrThrow(manifestBytes, {
         signatureHash: signature.hash,
         signature: signature.signature,
         signatureKeyId: signature.keyId,
@@ -52,13 +53,14 @@ describe('verifyManifestOrThrow', () => {
   });
 
   it('rejects invalid signatures', async () => {
-    const signature = signManifestBytes(serializeManifest(BASE_MANIFEST), {
+    const manifestBytes = serializeManifest(BASE_MANIFEST);
+    const signature = signManifestBytes(manifestBytes, {
       keyId: fixture.keyId,
       privateKey: fixture.privateKeyPem,
     });
 
     await expect(
-      verifyManifestOrThrow(BASE_MANIFEST, {
+      verifyManifestOrThrow(manifestBytes, {
         signatureHash: `${signature.hash.slice(0, -1)}0`,
         signature: `${signature.signature}broken`,
         signatureKeyId: signature.keyId,

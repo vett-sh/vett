@@ -368,7 +368,8 @@ export async function add(
   if (options.verify !== false) {
     s.start('Verifying signature');
     try {
-      await verifyManifestOrThrow(manifest, resolved.version);
+      // Use original downloaded bytes for verification, not re-serialized manifest
+      await verifyManifestOrThrow(Buffer.from(manifestContent), resolved.version);
     } catch (error) {
       s.stop('Signature verification failed');
       p.log.error((error as Error).message);

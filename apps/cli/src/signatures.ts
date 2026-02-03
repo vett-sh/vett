@@ -1,5 +1,4 @@
-import { serializeManifest, verifyManifestSignature } from '@vett/core/manifest-signature';
-import type { SkillManifest } from '@vett/core';
+import { verifyManifestSignature } from '@vett/core/manifest-signature';
 import { getSigningKeys } from './api';
 
 const PUBLIC_KEY_ENV = 'VETT_SIGNING_PUBLIC_KEY';
@@ -36,8 +35,13 @@ async function resolvePublicKey(keyId: string): Promise<string | null> {
   return found ? normalizeKey(found.publicKey) : null;
 }
 
+/**
+ * Verify manifest signature using the original downloaded bytes.
+ * Important: We must use the exact bytes that were signed, not re-serialized bytes,
+ * because JSON serialization order is not guaranteed to be stable.
+ */
 export async function verifyManifestOrThrow(
-  manifest: SkillManifest,
+  manifestBytes: Buffer,
   signatureMeta: SignatureMeta
 ): Promise<void> {
   if (
@@ -61,7 +65,6 @@ export async function verifyManifestOrThrow(
     createdAt: signatureMeta.signatureCreatedAt,
   };
 
-  const manifestBytes = serializeManifest(manifest);
   const ok = verifyManifestSignature(manifestBytes, signature, publicKey);
   if (!ok) {
     throw new Error('Signature verification failed.');
