@@ -13,6 +13,8 @@ import type {
   SkillDetail,
   SkillVersion,
 } from '@vett/core';
+import { detectInstalledAgents, parseAgentTypes, agents, type AgentType } from '../agents';
+import { installToAgents } from '../installer';
 
 /**
  * Format bytes to human readable
@@ -165,7 +167,14 @@ function installSkillFiles(manifest: SkillManifest, skillDir: string): void {
 
 export async function add(
   input: string,
-  options: { force?: boolean; yes?: boolean; verify?: boolean }
+  options: {
+    force?: boolean;
+    yes?: boolean;
+    verify?: boolean;
+    global?: boolean;
+    project?: boolean;
+    agent?: string[];
+  }
 ): Promise<void> {
   p.intro(pc.bgCyan(pc.black(' vett add ')));
 
@@ -384,10 +393,77 @@ export async function add(
     p.log.info(pc.dim(`Integrity verified (sha256 ${sigHash} · key ${keyId})`));
   }
 
-  // Install files
-  s.start('Installing');
+  // Install files to vett canonical location
+  s.start('Installing to vett');
   const skillDir = getSkillDir(resolved.skill.owner, resolved.skill.repo, resolved.skill.name);
   installSkillFiles(manifest, skillDir);
+  s.stop('Installed to vett');
+
+  // Determine installation scope
+  const isGlobal = options.project ? false : (options.global ?? true);
+  const scope = isGlobal ? 'global' : 'project';
+
+  // Determine target agents
+  let targetAgents: AgentType[];
+
+  if (options.agent && options.agent.length > 0) {
+    // User specified agents via -a flag
+    const { valid, invalid } = parseAgentTypes(options.agent);
+    if (invalid.length > 0) {
+      p.log.warn(`Unknown agent(s): ${invalid.join(', ')}`);
+    }
+    if (valid.length === 0) {
+      p.log.warn('No valid agents specified. Skill installed to vett only.');
+      targetAgents = [];
+    } else {
+      targetAgents = valid;
+    }
+  } else {
+    // Auto-detect installed agents
+    s.start('Detecting agents');
+    targetAgents = await detectInstalledAgents();
+    s.stop(
+      targetAgents.length > 0
+        ? `Detected ${targetAgents.length} agent${targetAgents.length === 1 ? '' : 's'}`
+        : 'No agents detected'
+    );
+  }
+
+  // Install to agent locations
+  let installedAgentNames: string[] = [];
+  if (targetAgents.length > 0) {
+    s.start('Installing to agents');
+    const results = await installToAgents(skillDir, resolved.skill.name, targetAgents, {
+      global: isGlobal,
+    });
+
+    const successful = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
+
+    if (failed.length > 0) {
+      for (const f of failed) {
+        p.log.warn(`${f.agentDisplayName}: ${f.error}`);
+      }
+    }
+
+    installedAgentNames = successful.map((r) => r.agentDisplayName);
+    const symlinkCount = successful.filter((r) => r.mode === 'symlink').length;
+    const copyCount = successful.filter((r) => r.mode === 'copy').length;
+
+    if (successful.length > 0) {
+      let modeInfo = '';
+      if (symlinkCount > 0 && copyCount > 0) {
+        modeInfo = ` (${symlinkCount} symlinked, ${copyCount} copied)`;
+      } else if (copyCount > 0) {
+        modeInfo = ' (copied)';
+      }
+      s.stop(
+        `Installed to ${successful.length} agent${successful.length === 1 ? '' : 's'}${modeInfo}`
+      );
+    } else {
+      s.stop('No agents installed');
+    }
+  }
 
   // Update config
   addInstalledSkill({
@@ -397,13 +473,21 @@ export async function add(
     version: resolved.version.version,
     installedAt: new Date(),
     path: skillDir,
+    agents: targetAgents,
+    scope,
   });
-  s.stop('Installed');
 
+  // Summary
   p.log.success(
     `${resolved.skill.owner}/${resolved.skill.repo}/${resolved.skill.name}@${resolved.version.version}`
   );
-  p.log.info(`Location: ${pc.dim(skillDir)}`);
+  p.log.info(`${pc.dim('Canonical:')} ${skillDir}`);
+
+  if (installedAgentNames.length > 0) {
+    p.log.info(`${pc.dim('Agents:')} ${installedAgentNames.join(', ')} (${scope})`);
+  } else {
+    p.log.info(pc.dim('No agents configured. Use -a <agent> to target specific agents.'));
+  }
 
   p.outro(pc.green('Done'));
 }

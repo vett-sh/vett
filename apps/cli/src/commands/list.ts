@@ -1,7 +1,6 @@
+import pc from 'picocolors';
 import { loadConfig } from '../config';
-
-const dim = '\x1b[2m';
-const reset = '\x1b[0m';
+import { agents, type AgentType } from '../agents';
 
 export async function list(): Promise<void> {
   const config = loadConfig();
@@ -9,7 +8,7 @@ export async function list(): Promise<void> {
 
   if (skills.length === 0) {
     console.log('No skills installed.');
-    console.log('\nInstall a skill with: vett install <owner/repo/skill>');
+    console.log(`\nInstall a skill with: ${pc.cyan('vett add <owner/repo/skill>')}`);
     return;
   }
 
@@ -17,9 +16,25 @@ export async function list(): Promise<void> {
 
   for (const skill of skills) {
     const date = new Date(skill.installedAt).toLocaleDateString();
-    console.log(`${skill.owner}/${skill.repo}/${skill.name}@${skill.version}`);
-    console.log(`  ${dim}Installed: ${date}${reset}`);
-    console.log(`  ${dim}Path: ${skill.path}${reset}`);
+    const scope = skill.scope || 'global';
+
+    // Skill header
+    console.log(
+      `${pc.bold(skill.name)} ${pc.dim(`${skill.owner}/${skill.repo}@${skill.version}`)}`
+    );
+
+    // Agents
+    const skillAgents = (skill.agents || []) as AgentType[];
+    if (skillAgents.length > 0) {
+      const agentNames = skillAgents.map((a) => agents[a]?.displayName || a).join(', ');
+      console.log(`  ${pc.dim('Agents:')} ${agentNames} ${pc.dim(`(${scope})`)}`);
+    } else {
+      console.log(`  ${pc.dim('Agents:')} ${pc.yellow('none')} ${pc.dim('(vett only)')}`);
+    }
+
+    // Metadata
+    console.log(`  ${pc.dim('Installed:')} ${date}`);
+    console.log(`  ${pc.dim('Path:')} ${pc.dim(skill.path)}`);
     console.log();
   }
 }

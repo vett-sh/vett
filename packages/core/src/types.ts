@@ -87,6 +87,10 @@ export interface InstalledSkill {
   version: string;
   installedAt: Date;
   path: string;
+  /** Agents this skill is installed to */
+  agents?: string[];
+  /** Installation scope: global (user-level) or project */
+  scope?: 'global' | 'project';
 }
 
 export interface VettConfig {
