@@ -1,4 +1,5 @@
 export * from './types';
+export * from './flag-utils';
 export * from './constants';
 export * from './schemas';
 export * from './url-parser';
