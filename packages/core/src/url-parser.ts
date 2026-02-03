@@ -172,12 +172,16 @@ function parseGitHostUrl(
 /**
  * Parse arbitrary HTTP URLs
  *
+ * Extracts repo (parent directory) and skill (filename) separately to avoid
+ * duplication in the database identity tuple.
+ *
  * Formats:
- * - example.com/path/to/SKILL.md
- * - example.com/path/to/skill
+ * - example.com/SKILL.md -> repo=example, skill=example
+ * - example.com/docs/skill.md -> repo=example, skill=docs
+ * - example.com/path/to/docs/skill.md -> repo=path/to, skill=docs
+ * - example.com/docs/frontend.md -> repo=docs, skill=frontend
  */
 function parseHttpUrl(host: string, pathParts: string[], sourceUrl: string): ParsedSkillUrl {
-  // Normalize path parts
   const normalized = pathParts.map((p) => p.toLowerCase());
 
   // Strip .md extension from last part
@@ -186,22 +190,51 @@ function parseHttpUrl(host: string, pathParts: string[], sourceUrl: string): Par
     normalized[normalized.length - 1] = last.replace(/\.md$/, '');
   }
 
-  // Handle root SKILL.md -> use host as skill name
-  // e.g., moltbook.com/SKILL.md -> moltbook.com/moltbook
+  const hostBase = host.split('.')[0]; // moltbook.com -> moltbook
+
+  let repo: string;
   let skill: string;
-  if (normalized.length === 0 || (normalized.length === 1 && normalized[0] === 'skill')) {
-    skill = host.split('.')[0]; // moltbook.com -> moltbook
+
+  if (normalized.length === 0) {
+    // Bare domain (example.com/)
+    repo = hostBase;
+    skill = hostBase;
+  } else if (normalized.length === 1) {
+    // Single component (example.com/foo.md or example.com/skill.md)
+    repo = hostBase;
+    // If filename is literally "skill", use host base as skill name
+    skill = normalized[0] === 'skill' ? hostBase : normalized[0];
   } else {
-    // Filter out 'skill' if it's just the filename
-    const filtered = normalized.filter((p) => p !== 'skill' || normalized.length === 1);
-    skill = filtered.join('/');
+    // Multiple components (example.com/path/to/foo.md)
+    const filename = normalized[normalized.length - 1];
+    const parentPath = normalized.slice(0, -1);
+
+    if (filename === 'skill') {
+      // skill.md convention: the directory containing skill.md IS the skill
+      // e.g., docs/skill.md -> the skill is "docs"
+      if (parentPath.length === 1) {
+        // e.g., docs/skill.md -> repo=hostBase, skill=docs
+        repo = hostBase;
+        skill = parentPath[0];
+      } else {
+        // e.g., path/to/docs/skill.md -> repo=path/to, skill=docs
+        repo = parentPath.slice(0, -1).join('/');
+        skill = parentPath[parentPath.length - 1];
+      }
+    } else {
+      // Regular file: skill name is the filename
+      // e.g., docs/frontend.md -> repo=docs, skill=frontend
+      repo = parentPath.join('/');
+      skill = filename;
+    }
   }
 
-  const id = `${host}/${skill}`;
+  const id = `${host}/${repo}/${skill}`;
 
   return {
     host,
     id,
+    repo,
     skill,
     sourceUrl,
   };
