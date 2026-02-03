@@ -94,3 +94,27 @@ export interface VettConfig {
   registryUrl: string;
   installedSkills: InstalledSkill[];
 }
+
+// ============================================================================
+// Well-Known Skills Discovery (Cloudflare RFC)
+// https://github.com/cloudflare/agent-skills-discovery-rfc
+// ============================================================================
+
+/**
+ * A skill entry from /.well-known/skills/index.json
+ */
+export interface WellKnownSkillEntry {
+  /** Skill identifier (1-64 chars, lowercase alphanumeric + hyphens) */
+  name: string;
+  /** Brief description of what the skill does */
+  description: string;
+  /** Files included in the skill (SKILL.md must be first) */
+  files: string[];
+}
+
+/**
+ * The index served at /.well-known/skills/index.json
+ */
+export interface WellKnownIndex {
+  skills: WellKnownSkillEntry[];
+}
