@@ -26,9 +26,10 @@ function formatBytes(bytes: number): string {
 /**
  * Get verdict from risk level
  */
-function getVerdict(risk: RiskLevel | null): 'verified' | 'review' | 'blocked' {
+function getVerdict(risk: RiskLevel | null): 'verified' | 'review' | 'caution' | 'blocked' {
   if (!risk || risk === 'none' || risk === 'low') return 'verified';
   if (risk === 'medium') return 'review';
+  if (risk === 'high') return 'caution';
   return 'blocked';
 }
 
@@ -70,13 +71,21 @@ function formatSkillInfo(result: ResolvedResult): string {
 
   // Header
   const verdictIcon =
-    verdict === 'verified' ? pc.green('✓') : verdict === 'review' ? pc.yellow('⚠') : pc.red('⛔');
+    verdict === 'verified'
+      ? pc.green('✓')
+      : verdict === 'review'
+        ? pc.yellow('⚠')
+        : verdict === 'caution'
+          ? pc.red('⚠')
+          : pc.red('⛔');
   const verdictLabel =
     verdict === 'verified'
       ? pc.green('Verified')
       : verdict === 'review'
         ? pc.yellow('Review')
-        : pc.red('Blocked');
+        : verdict === 'caution'
+          ? pc.red('Caution')
+          : pc.red('Blocked');
 
   lines.push(`${pc.bold(skill.name)}`);
   lines.push(
@@ -276,18 +285,26 @@ export async function add(
   const skillRef = `${resolved.skill.owner}/${resolved.skill.repo}/${resolved.skill.name}`;
   p.note(formatSkillInfo(resolved), skillRef);
 
-  // Block high-risk skills
+  // Block critical-risk skills
   if (verdict === 'blocked') {
     p.log.error('Potential malicious behavior detected');
     p.outro(pc.red('Installation refused'));
     process.exit(1);
   }
 
+  // Show strong warning for high-risk skills
+  if (verdict === 'caution') {
+    p.log.warn(pc.red('This skill has significant security concerns.'));
+    p.log.warn(pc.red('Review the security findings above carefully before proceeding.'));
+  }
+
   // Auto-approve or prompt
   let shouldInstall = options.yes;
   if (!shouldInstall) {
+    const confirmMessage =
+      verdict === 'caution' ? 'I understand the risks. Install this skill?' : 'Install this skill?';
     const confirmResult = await p.confirm({
-      message: 'Install this skill?',
+      message: confirmMessage,
       initialValue: verdict === 'verified',
     });
 
