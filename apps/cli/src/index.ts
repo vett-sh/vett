@@ -20,7 +20,6 @@ program
   .description('Add a skill from URL or ref (registry-first, then analyze/install)')
   .option('-f, --force', 'Force reinstall if already installed')
   .option('-y, --yes', 'Skip confirmation prompt')
-  .option('--no-verify', 'Skip signature verification')
   .option('-g, --global', 'Install globally (default)')
   .option('-p, --project', 'Install to current project only')
   .option('-a, --agent <agent>', 'Target specific agent(s)', collect, [])

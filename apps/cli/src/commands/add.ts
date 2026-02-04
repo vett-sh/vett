@@ -211,7 +211,6 @@ export async function add(
   options: {
     force?: boolean;
     yes?: boolean;
-    verify?: boolean;
     global?: boolean;
     project?: boolean;
     agent?: string[];
@@ -423,24 +422,23 @@ export async function add(
   }
   const manifest = manifestResult.data as SkillManifest;
 
-  if (options.verify !== false) {
-    s.start('Verifying signature');
-    try {
-      // Use original downloaded bytes for verification, not re-serialized manifest
-      await verifyManifestOrThrow(Buffer.from(manifestContent), resolved.version);
-    } catch (error) {
-      s.stop('Signature verification failed');
-      p.log.error((error as Error).message);
-      p.outro(pc.red('Installation failed'));
-      process.exit(1);
-    }
-    s.stop('Signature verified');
-    const sigHash = resolved.version.signatureHash
-      ? `${resolved.version.signatureHash.slice(0, 8)}…`
-      : 'unknown';
-    const keyId = resolved.version.signatureKeyId ?? 'unknown';
-    p.log.info(pc.dim(`Integrity verified (sha256 ${sigHash} · key ${keyId})`));
+  // Verify signature (always required)
+  s.start('Verifying signature');
+  try {
+    // Use original downloaded bytes for verification, not re-serialized manifest
+    await verifyManifestOrThrow(Buffer.from(manifestContent), resolved.version);
+  } catch (error) {
+    s.stop('Signature verification failed');
+    p.log.error((error as Error).message);
+    p.outro(pc.red('Installation failed'));
+    process.exit(1);
   }
+  s.stop('Signature verified');
+  const sigHash = resolved.version.signatureHash
+    ? `${resolved.version.signatureHash.slice(0, 8)}…`
+    : 'unknown';
+  const keyId = resolved.version.signatureKeyId ?? 'unknown';
+  p.log.info(pc.dim(`Integrity verified (sha256 ${sigHash} · key ${keyId})`));
 
   // Install files to vett canonical location
   s.start('Installing to vett');
