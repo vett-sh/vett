@@ -1,5 +1,5 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, normalize, sep } from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { ingestSkill, waitForJob, downloadArtifact, getSkillByRef, getSkillByUrl } from '../api';
@@ -153,13 +153,47 @@ function formatSkillInfo(result: ResolvedResult): string {
 }
 
 /**
+ * Error thrown when a path traversal attempt is detected
+ */
+class PathTraversalError extends Error {
+  constructor(
+    public readonly attemptedPath: string,
+    public readonly baseDir: string
+  ) {
+    super(`Path traversal detected: "${attemptedPath}" escapes base directory`);
+    this.name = 'PathTraversalError';
+  }
+}
+
+/**
+ * Validates that a resolved path stays within the base directory.
+ * Throws PathTraversalError if the path escapes.
+ */
+function assertPathWithinBase(baseDir: string, filePath: string): string {
+  // Normalize the base directory
+  const normalizedBase = normalize(resolve(baseDir));
+
+  // Resolve the full path
+  const fullPath = resolve(baseDir, filePath);
+
+  // Check if the resolved path starts with the base directory
+  // Add sep to prevent prefix attacks (e.g., /base-evil matching /base)
+  if (!fullPath.startsWith(normalizedBase + sep) && fullPath !== normalizedBase) {
+    throw new PathTraversalError(filePath, baseDir);
+  }
+
+  return fullPath;
+}
+
+/**
  * Install skill files from manifest
  */
 function installSkillFiles(manifest: SkillManifest, skillDir: string): void {
   mkdirSync(skillDir, { recursive: true });
 
   for (const file of manifest.files) {
-    const filePath = join(skillDir, file.path);
+    // Validate path doesn't escape skill directory (defense in depth)
+    const filePath = assertPathWithinBase(skillDir, file.path);
     mkdirSync(join(filePath, '..'), { recursive: true });
     writeFileSync(filePath, file.content, 'utf-8');
   }
