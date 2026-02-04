@@ -1,10 +1,10 @@
 import pc from 'picocolors';
-import { loadConfig } from '../config';
+import { loadIndex } from '../config';
 import { agents, type AgentType } from '../agents';
 
 export async function list(): Promise<void> {
-  const config = loadConfig();
-  const skills = config.installedSkills;
+  const index = loadIndex();
+  const skills = index.installedSkills;
 
   if (skills.length === 0) {
     console.log('No skills installed.');

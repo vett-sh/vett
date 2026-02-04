@@ -1,9 +1,9 @@
-import { loadConfig, getInstalledSkill } from '../config';
+import { loadIndex, getInstalledSkill } from '../config';
 import { getSkillByRef } from '../api';
 import { add } from './add';
 
 export async function update(skillRef?: string): Promise<void> {
-  const config = loadConfig();
+  const index = loadIndex();
 
   if (skillRef) {
     // Update specific skill
@@ -24,7 +24,7 @@ export async function update(skillRef?: string): Promise<void> {
     await updateSkill(owner, repo, name, installed.version);
   } else {
     // Update all skills
-    const skills = config.installedSkills;
+    const skills = index.installedSkills;
 
     if (skills.length === 0) {
       console.log('No skills installed.');

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { loadConfig, saveConfig } from '../config';
+import { loadIndex, saveIndex } from '../config';
 import { agents, detectInstalledAgents, type AgentType } from '../agents';
 import {
   installToAgent,
@@ -33,8 +33,8 @@ export async function sync(options: { fix?: boolean; addNew?: boolean }): Promis
 
   // Load config and detect agents
   s.start('Scanning installations');
-  const config = loadConfig();
-  const skills = config.installedSkills;
+  const index = loadIndex();
+  const skills = index.installedSkills;
 
   if (skills.length === 0) {
     s.stop('No skills installed');
@@ -182,7 +182,7 @@ export async function sync(options: { fix?: boolean; addNew?: boolean }): Promis
     }
 
     // Save updated config
-    saveConfig(config);
+    saveIndex(index);
   }
 
   s.stop(`Fixed ${fixed} issue${fixed === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}`);

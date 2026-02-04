@@ -94,8 +94,16 @@ export interface InstalledSkill {
 }
 
 export interface VettConfig {
+  schemaVersion: number;
   installDir: string;
   registryUrl: string;
+  telemetry: {
+    enabled: boolean;
+  };
+}
+
+export interface VettIndex {
+  schemaVersion: number;
   installedSkills: InstalledSkill[];
 }
 

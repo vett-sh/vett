@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { loadConfig, removeInstalledSkill } from '../config';
+import { loadIndex, removeInstalledSkill } from '../config';
 import { agents, type AgentType } from '../agents';
 import { removeFromAgent, isPathSafe } from '../installer';
 import type { InstalledSkill } from '@vett/core';
@@ -135,8 +135,8 @@ export async function remove(
   }
 
   // Find the skill
-  const config = loadConfig();
-  const result = findSkillByRef(config.installedSkills, parsed);
+  const index = loadIndex();
+  const result = findSkillByRef(index.installedSkills, parsed);
 
   if (result.status === 'not_found') {
     p.log.error(`Skill "${skillRef}" not found`);
