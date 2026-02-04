@@ -6,6 +6,26 @@
   "bin": {
     "vett": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vett-sh/vett-monorepo.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://vett.sh",
+  "bugs": {
+    "url": "https://github.com/vett-sh/vett-monorepo/issues"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
