@@ -2,7 +2,14 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, normalize, sep } from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { ingestSkill, waitForJob, downloadArtifact, getSkillByRef, getSkillByUrl } from '../api';
+import {
+  ingestSkill,
+  waitForJob,
+  downloadArtifact,
+  getSkillByRef,
+  getSkillByUrl,
+  RateLimitError,
+} from '../api';
 import { getSkillDir, addInstalledSkill, getInstalledSkill } from '../config';
 import { verifyManifestOrThrow } from '../signatures';
 import { skillManifestSchema, skillRefSchema } from '@vett/core';
@@ -238,7 +245,11 @@ export async function add(
     }
   } catch (error) {
     s.stop('Registry lookup failed');
-    p.log.error((error as Error).message);
+    if (error instanceof RateLimitError) {
+      p.log.error(`Rate limit exceeded. Please wait ${error.retryAfter} seconds and try again.`);
+    } else {
+      p.log.error((error as Error).message);
+    }
     p.outro(pc.red('Installation failed'));
     process.exit(1);
   }
@@ -255,7 +266,11 @@ export async function add(
       ingestResponse = await ingestSkill(ingestUrl);
     } catch (error) {
       s.stop('Submission failed');
-      p.log.error((error as Error).message);
+      if (error instanceof RateLimitError) {
+        p.log.error(`Rate limit exceeded. Please wait ${error.retryAfter} seconds and try again.`);
+      } else {
+        p.log.error((error as Error).message);
+      }
       p.outro(pc.red('Installation failed'));
       process.exit(1);
     }

@@ -4,6 +4,21 @@ import { computeManifestHash as computeManifestHashCore } from '@vett/core/manif
 import { createHash } from 'node:crypto';
 import type { Skill, SkillDetail, SkillVersion, AnalysisResult, SkillManifest } from '@vett/core';
 
+/**
+ * Error thrown when the API rate limit is exceeded.
+ */
+export class RateLimitError extends Error {
+  constructor(
+    public readonly retryAfter: number,
+    public readonly limit: number,
+    public readonly reset: number
+  ) {
+    const waitSeconds = Math.ceil(retryAfter);
+    super(`Rate limit exceeded. Please wait ${waitSeconds} seconds before retrying.`);
+    this.name = 'RateLimitError';
+  }
+}
+
 // CLI version for identification headers
 const CLI_VERSION = '0.1.0';
 
@@ -86,6 +101,13 @@ async function fetchJson<T>(path: string, options: RequestInit = {}): Promise<T>
     },
   });
 
+  if (response.status === 429) {
+    const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
+    const limit = parseInt(response.headers.get('X-RateLimit-Limit') || '0', 10);
+    const reset = parseInt(response.headers.get('X-RateLimit-Reset') || '0', 10);
+    throw new RateLimitError(retryAfter, limit, reset);
+  }
+
   if (!response.ok) {
     const errorBody = (await response.json().catch(() => ({ error: 'Unknown error' }))) as {
       error?: string;
@@ -108,6 +130,13 @@ async function fetchJsonOrNull<T>(path: string, options: RequestInit = {}): Prom
 
   if (response.status === 404) {
     return null;
+  }
+
+  if (response.status === 429) {
+    const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
+    const limit = parseInt(response.headers.get('X-RateLimit-Limit') || '0', 10);
+    const reset = parseInt(response.headers.get('X-RateLimit-Reset') || '0', 10);
+    throw new RateLimitError(retryAfter, limit, reset);
   }
 
   if (!response.ok) {
@@ -163,6 +192,13 @@ export async function downloadSkill(
     redirect: 'follow',
     headers: getHeaders(),
   });
+
+  if (response.status === 429) {
+    const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
+    const limit = parseInt(response.headers.get('X-RateLimit-Limit') || '0', 10);
+    const reset = parseInt(response.headers.get('X-RateLimit-Reset') || '0', 10);
+    throw new RateLimitError(retryAfter, limit, reset);
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to download: HTTP ${response.status}`);
