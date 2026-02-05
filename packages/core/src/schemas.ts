@@ -39,7 +39,14 @@ export type SortOption = (typeof SORT_OPTIONS)[number];
 export const searchQuerySchema = z.object({
   q: z.string().optional(),
   source: z.enum(SKILL_SOURCES).optional(),
-  risk: z.enum(RISK_LEVELS).optional(),
+  risk: z
+    .string()
+    .optional()
+    .transform((v) => v?.split(',') as (typeof RISK_LEVELS)[number][] | undefined)
+    .refine(
+      (v) => !v || v.every((r) => (RISK_LEVELS as readonly string[]).includes(r)),
+      'Invalid risk level'
+    ),
   sortBy: z.enum(SORT_OPTIONS).optional().default('installs'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
