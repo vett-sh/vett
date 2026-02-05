@@ -66,16 +66,9 @@ export interface JobResponse {
       risk: string | null;
       summary: string | null;
       analysis: AnalysisResult | null;
-      signatureHash: string | null;
-      signature: string | null;
-      signatureKeyId: string | null;
-      signatureCreatedAt: string | null;
+      sigstoreBundle: unknown | null;
     };
   };
-}
-
-export interface SigningKeysResponse {
-  keys: Array<{ keyId: string; publicKey: string }>;
 }
 
 function getBaseUrl(): string {
@@ -176,10 +169,6 @@ export async function getSkillByUrl(url: string): Promise<SkillDetail | null> {
 
 export async function getVersion(skillId: string, version: string): Promise<SkillVersion> {
   return fetchJson<SkillVersion>(`/api/v1/skills/${skillId}/versions/${version}`);
-}
-
-export async function getSigningKeys(): Promise<SigningKeysResponse> {
-  return fetchJson<SigningKeysResponse>('/api/v1/keys');
 }
 
 export async function downloadSkill(

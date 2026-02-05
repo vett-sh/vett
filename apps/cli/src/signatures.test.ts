@@ -1,71 +1,79 @@
-import { describe, expect, it, vi } from 'vitest';
-import { generateKeyPairSync } from 'node:crypto';
-import { signManifestBytes, serializeManifest } from '@vett/core/manifest-signature';
-import { SKILL_MANIFEST_SCHEMA_VERSION, type SkillManifest } from '@vett/core';
-import { verifyManifestOrThrow } from './signatures';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { verifySigstoreBundle, verifyManifestOrThrow } from './signatures';
 
-const fixture = (() => {
-  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
-  const privateKeyPem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
-  const publicKeyPem = publicKey.export({ format: 'pem', type: 'spki' }).toString();
-
-  return {
-    keyId: 'cli-test-key',
-    privateKeyPem,
-    publicKeyPem,
-  };
-})();
-
-vi.mock('./api', () => ({
-  getSigningKeys: vi.fn(async () => ({
-    keys: [{ keyId: fixture.keyId, publicKey: fixture.publicKeyPem }],
-  })),
+// Mock the sigstore library
+vi.mock('sigstore', () => ({
+  verify: vi.fn(),
 }));
 
-const BASE_MANIFEST: SkillManifest = {
-  schemaVersion: SKILL_MANIFEST_SCHEMA_VERSION,
-  entryPoint: 'SKILL.md',
-  files: [
-    {
-      path: 'SKILL.md',
-      content: '# Demo',
-      contentType: 'text/markdown',
-    },
-  ],
-};
+import { verify } from 'sigstore';
+const mockVerify = vi.mocked(verify);
 
-describe('verifyManifestOrThrow', () => {
-  it('accepts valid signatures', async () => {
-    const manifestBytes = serializeManifest(BASE_MANIFEST);
-    const signature = signManifestBytes(manifestBytes, {
-      keyId: fixture.keyId,
-      privateKey: fixture.privateKeyPem,
-    });
+describe('Sigstore verification', () => {
+  const manifestBytes = Buffer.from('{"test": "manifest"}');
+  const validBundle = {
+    mediaType: 'application/vnd.dev.sigstore.bundle+json;version=0.2',
+    verificationMaterial: {},
+    messageSignature: {},
+  };
 
-    await expect(
-      verifyManifestOrThrow(manifestBytes, {
-        signatureHash: signature.hash,
-        signature: signature.signature,
-        signatureKeyId: signature.keyId,
-        signatureCreatedAt: signature.createdAt,
-      })
-    ).resolves.toBeUndefined();
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('rejects invalid signatures', async () => {
-    const manifestBytes = serializeManifest(BASE_MANIFEST);
-    const signature = signManifestBytes(manifestBytes, {
-      keyId: fixture.keyId,
-      privateKey: fixture.privateKeyPem,
+  describe('verifySigstoreBundle', () => {
+    it('calls sigstore verify with keySelector', async () => {
+      mockVerify.mockResolvedValueOnce(undefined as never);
+
+      await verifySigstoreBundle(manifestBytes, validBundle as never);
+
+      expect(mockVerify).toHaveBeenCalledWith(validBundle, manifestBytes, {
+        keySelector: expect.any(Function),
+      });
     });
 
-    await expect(
-      verifyManifestOrThrow(manifestBytes, {
-        signatureHash: `${signature.hash.slice(0, -1)}0`,
-        signature: `${signature.signature}broken`,
-        signatureKeyId: signature.keyId,
-        signatureCreatedAt: signature.createdAt,
-      })
-    ).rejects.toThrow('Signature verification failed.');
+    it('throws on verification failure', async () => {
+      mockVerify.mockRejectedValueOnce(new Error('Invalid signature'));
+
+      await expect(verifySigstoreBundle(manifestBytes, validBundle as never)).rejects.toThrow(
+        'Sigstore verification failed: Invalid signature'
+      );
+    });
+
+    it('handles non-Error rejection', async () => {
+      mockVerify.mockRejectedValueOnce('string error');
+
+      await expect(verifySigstoreBundle(manifestBytes, validBundle as never)).rejects.toThrow(
+        'Sigstore verification failed: Unknown error'
+      );
+    });
+  });
+
+  describe('verifyManifestOrThrow', () => {
+    it('verifies when sigstoreBundle is present', async () => {
+      mockVerify.mockResolvedValueOnce(undefined as never);
+
+      await verifyManifestOrThrow(manifestBytes, { sigstoreBundle: validBundle });
+
+      expect(mockVerify).toHaveBeenCalled();
+    });
+
+    it('throws when sigstoreBundle is missing', async () => {
+      await expect(verifyManifestOrThrow(manifestBytes, {})).rejects.toThrow(
+        'No Sigstore bundle found'
+      );
+    });
+
+    it('throws when sigstoreBundle is null', async () => {
+      await expect(verifyManifestOrThrow(manifestBytes, { sigstoreBundle: null })).rejects.toThrow(
+        'No Sigstore bundle found'
+      );
+    });
+
+    it('throws when sigstoreBundle is undefined', async () => {
+      await expect(
+        verifyManifestOrThrow(manifestBytes, { sigstoreBundle: undefined })
+      ).rejects.toThrow('No Sigstore bundle found');
+    });
   });
 });

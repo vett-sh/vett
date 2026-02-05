@@ -53,10 +53,7 @@ interface VersionInfo {
   risk: RiskLevel | null;
   summary: string | null;
   analysis: AnalysisResult | null;
-  signatureHash: string | null;
-  signature: string | null;
-  signatureKeyId: string | null;
-  signatureCreatedAt: string | null;
+  sigstoreBundle: unknown | null;
 }
 
 interface SkillInfo {
@@ -328,10 +325,7 @@ export async function add(
         risk: jobResult.version.risk as RiskLevel | null,
         summary: jobResult.version.summary,
         analysis: jobResult.version.analysis,
-        signatureHash: jobResult.version.signatureHash ?? null,
-        signature: jobResult.version.signature ?? null,
-        signatureKeyId: jobResult.version.signatureKeyId ?? null,
-        signatureCreatedAt: jobResult.version.signatureCreatedAt ?? null,
+        sigstoreBundle: jobResult.version.sigstoreBundle ?? null,
       },
     };
   }
@@ -434,11 +428,7 @@ export async function add(
     process.exit(1);
   }
   s.stop('Signature verified');
-  const sigHash = resolved.version.signatureHash
-    ? `${resolved.version.signatureHash.slice(0, 8)}…`
-    : 'unknown';
-  const keyId = resolved.version.signatureKeyId ?? 'unknown';
-  p.log.info(pc.dim(`Integrity verified (sha256 ${sigHash} · key ${keyId})`));
+  p.log.info(pc.dim(`Integrity verified (Sigstore · Rekor transparency log)`));
 
   // Install files to vett canonical location
   s.start('Installing to vett');
@@ -573,12 +563,7 @@ function toVersionInfo(version: SkillVersion): VersionInfo {
     risk: version.risk as RiskLevel | null,
     summary: version.summary,
     analysis: version.analysis,
-    signatureHash: version.signatureHash ?? null,
-    signature: version.signature ?? null,
-    signatureKeyId: version.signatureKeyId ?? null,
-    signatureCreatedAt: version.signatureCreatedAt
-      ? new Date(version.signatureCreatedAt).toISOString()
-      : null,
+    sigstoreBundle: version.sigstoreBundle ?? null,
   };
 }
 

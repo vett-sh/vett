@@ -1,72 +1,83 @@
-import { verifyManifestSignature } from '@vett/core/manifest-signature';
-import { getSigningKeys } from './api';
+/**
+ * Sigstore signature verification for CLI
+ *
+ * Verifies Sigstore bundles containing ECDSA P-256 signatures with Rekor transparency log.
+ */
 
-const PUBLIC_KEY_ENV = 'VETT_SIGNING_PUBLIC_KEY';
-const KEY_ID_ENV = 'VETT_SIGNING_KEY_ID';
+import { verify } from 'sigstore';
+import type { SerializedBundle } from '@sigstore/bundle';
 
-export interface SignatureMeta {
-  signatureHash: string | null;
-  signature: string | null;
-  signatureKeyId: string | null;
-  signatureCreatedAt: string | null;
-}
+// =============================================================================
+// Production Signing Key
+// =============================================================================
+// Update these values when rotating the signing key.
+// The corresponding private key must be set in the server environment.
 
-function normalizeKey(value: string): string {
-  if (value.includes('BEGIN')) {
-    return value;
+const SIGNING_KEY_ID = 'v1-ecdsa-2025-02-04';
+
+const SIGNING_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEpLgag/JqlL70ydbJb5xZOFANSzdV
+TShO8PIRRUhkmIhHkxyBS2KOIkev+jc2xerSjQqRcDGxdrUmRMKuCMtADw==
+-----END PUBLIC KEY-----`;
+
+// =============================================================================
+
+/**
+ * Key selector callback for sigstore verify.
+ * Returns the public key for verification based on the key hint in the bundle.
+ */
+function keySelector(hint: string): string {
+  if (hint === SIGNING_KEY_ID) {
+    return SIGNING_PUBLIC_KEY;
   }
 
-  try {
-    return Buffer.from(value, 'base64').toString('utf-8');
-  } catch {
-    return value;
-  }
-}
-
-async function resolvePublicKey(keyId: string): Promise<string | null> {
-  const envKeyId = process.env[KEY_ID_ENV];
-  const envPublicKey = process.env[PUBLIC_KEY_ENV];
-  if (envKeyId && envPublicKey && envKeyId === keyId) {
-    return normalizeKey(envPublicKey);
-  }
-
-  const response = await getSigningKeys();
-  const found = response.keys.find((entry) => entry.keyId === keyId);
-  return found ? normalizeKey(found.publicKey) : null;
+  throw new Error(
+    `Unknown signing key: "${hint}". Expected: "${SIGNING_KEY_ID}". ` +
+      'This may indicate a key rotation - try updating the vett CLI.'
+  );
 }
 
 /**
- * Verify manifest signature using the original downloaded bytes.
- * Important: We must use the exact bytes that were signed, not re-serialized bytes,
- * because JSON serialization order is not guaranteed to be stable.
+ * Verify a Sigstore bundle against manifest bytes.
+ *
+ * Validates:
+ * - Signature is valid for the manifest
+ * - Public key matches expected vett signing key
+ * - Rekor transparency log inclusion
+ *
+ * @param manifestBytes - The manifest content to verify
+ * @param serializedBundle - JSON-serialized Sigstore bundle from the API
+ */
+export async function verifySigstoreBundle(
+  manifestBytes: Buffer,
+  serializedBundle: unknown
+): Promise<void> {
+  try {
+    // sigstore's verify accepts the serialized bundle format directly
+    // Type assertion is safe as verify will throw if bundle is invalid
+    await verify(serializedBundle as SerializedBundle, manifestBytes, {
+      keySelector,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Sigstore verification failed: ${message}`);
+  }
+}
+
+/**
+ * Verify manifest signature using Sigstore bundle.
  */
 export async function verifyManifestOrThrow(
   manifestBytes: Buffer,
-  signatureMeta: SignatureMeta
+  version: {
+    sigstoreBundle?: unknown;
+  }
 ): Promise<void> {
-  if (
-    !signatureMeta.signature ||
-    !signatureMeta.signatureHash ||
-    !signatureMeta.signatureKeyId ||
-    !signatureMeta.signatureCreatedAt
-  ) {
-    throw new Error('Missing signature metadata from registry.');
+  if (!version.sigstoreBundle) {
+    throw new Error(
+      'No Sigstore bundle found - skill is unsigned or uses deprecated legacy signing.'
+    );
   }
 
-  const publicKey = await resolvePublicKey(signatureMeta.signatureKeyId);
-  if (!publicKey) {
-    throw new Error(`No public key found for key ID ${signatureMeta.signatureKeyId}.`);
-  }
-
-  const signature = {
-    keyId: signatureMeta.signatureKeyId,
-    hash: signatureMeta.signatureHash,
-    signature: signatureMeta.signature,
-    createdAt: signatureMeta.signatureCreatedAt,
-  };
-
-  const ok = verifyManifestSignature(manifestBytes, signature, publicKey);
-  if (!ok) {
-    throw new Error('Signature verification failed.');
-  }
+  await verifySigstoreBundle(manifestBytes, version.sigstoreBundle);
 }
