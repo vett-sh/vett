@@ -1,15 +1,17 @@
 import { readFileSync } from 'node:fs';
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsdown';
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 export default defineConfig({
   entry: ['src/index.ts'],
-  format: ['cjs'],
+  format: ['esm'],
   target: 'node20',
   outDir: 'dist',
   clean: true,
-  splitting: false,
+  outputOptions: {
+    codeSplitting: false,
+  },
   sourcemap: true,
   dts: false,
   banner: {
@@ -18,4 +20,6 @@ export default defineConfig({
   define: {
     __VERSION__: JSON.stringify(pkg.version),
   },
+  // All deps are bundled — the published package has zero runtime deps.
+  inlineOnly: false,
 });

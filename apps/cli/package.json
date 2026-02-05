@@ -4,7 +4,7 @@
   "description": "CLI for the Vett secure agent skill registry",
   "type": "module",
   "bin": {
-    "vett": "./dist/index.cjs"
+    "vett": "./dist/index.mjs"
   },
   "files": [
     "dist",
@@ -27,11 +27,11 @@
     "url": "https://github.com/vett-sh/vett-monorepo/issues"
   },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "start": "node dist/index.cjs"
+    "start": "node dist/index.mjs"
   },
   "keywords": [
     "vett",
@@ -50,7 +50,7 @@
     "commander": "^12.1.0",
     "picocolors": "^1.1.1",
     "sigstore": "^4.1.0",
-    "tsup": "^8.3.5",
+    "tsdown": "^0.20.3",
     "typescript": "^5.6.3",
     "vitest": "^3.2.4"
   }
