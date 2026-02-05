@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'tsup';
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 export default defineConfig({
   entry: ['src/index.ts'],
-  format: ['esm'],
+  format: ['cjs'],
   target: 'node20',
   outDir: 'dist',
   clean: true,
@@ -12,12 +15,7 @@ export default defineConfig({
   banner: {
     js: '#!/usr/bin/env node',
   },
-  noExternal: [
-    '@vett/core',
-    '@clack/prompts',
-    '@clack/core',
-    'picocolors',
-    'sisteransi',
-    'is-unicode-supported',
-  ],
+  define: {
+    __VERSION__: JSON.stringify(pkg.version),
+  },
 });

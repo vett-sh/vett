@@ -19,8 +19,10 @@ export class RateLimitError extends Error {
   }
 }
 
+declare const __VERSION__: string;
+
 // CLI version for identification headers
-const CLI_VERSION = '0.1.0';
+const CLI_VERSION = __VERSION__;
 
 interface SearchResponse {
   skills: Skill[];

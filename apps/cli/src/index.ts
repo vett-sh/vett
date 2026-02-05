@@ -8,7 +8,12 @@ import { remove } from './commands/remove';
 import { sync } from './commands/sync';
 import { listAgents } from './commands/agents';
 
-program.name('vett').description('CLI for the Vett secure agent skill registry').version('0.1.0');
+declare const __VERSION__: string;
+
+program
+  .name('vett')
+  .description('CLI for the Vett secure agent skill registry')
+  .version(__VERSION__);
 
 // Collect multiple -a flags into an array
 function collect(value: string, previous: string[]): string[] {
