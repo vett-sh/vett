@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isPathSafe, skillManifestFileSchema, skillManifestSchema } from './manifest';
+import {
+  createSkillManifestFileSchema,
+  createSkillManifestSchema,
+  isPathSafe,
+  skillManifestFileSchema,
+  skillManifestSchema,
+} from './manifest';
 
 describe('isPathSafe', () => {
   describe('rejects dangerous paths', () => {
@@ -116,5 +122,35 @@ describe('skillManifestSchema', () => {
       entryPoint: 'SKILL.md',
     });
     expect(result.success).toBe(false);
+  });
+
+  it('rejects files that exceed max file bytes', () => {
+    const schema = createSkillManifestFileSchema({ maxFileBytes: 10, maxTotalBytes: 100 });
+    const result = schema.safeParse({
+      path: 'SKILL.md',
+      content: '12345678901', // 11 bytes
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('too large');
+    }
+  });
+
+  it('rejects manifests that exceed max total bytes', () => {
+    const schema = createSkillManifestSchema({ maxFileBytes: 100, maxTotalBytes: 20 });
+    const result = schema.safeParse({
+      schemaVersion: 1,
+      files: [
+        { path: 'SKILL.md', content: '12345678901' }, // 11 bytes
+        { path: 'rules/a.md', content: '12345678901' }, // 11 bytes => 22 total
+      ],
+      entryPoint: 'SKILL.md',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.message.includes('manifest is too large'))).toBe(
+        true
+      );
+    }
   });
 });

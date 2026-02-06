@@ -12,7 +12,7 @@ import {
 } from '../api';
 import { getSkillDir, addInstalledSkill, getInstalledSkill } from '../config';
 import { verifyManifestOrThrow } from '../signatures';
-import { skillManifestSchema, skillRefSchema } from '@vett/core';
+import { createSkillManifestSchema, skillRefSchema } from '@vett/core';
 import type {
   AnalysisResult,
   RiskLevel,
@@ -405,11 +405,15 @@ export async function add(
 
   // Parse manifest
   const manifestJson = JSON.parse(Buffer.from(manifestContent).toString('utf-8'));
-  const manifestResult = skillManifestSchema.safeParse(manifestJson);
+  // Byte-size limits are server-enforced; keep CLI validation focused on structure + path safety.
+  const manifestResult = createSkillManifestSchema({
+    maxFileBytes: Number.MAX_SAFE_INTEGER,
+    maxTotalBytes: Number.MAX_SAFE_INTEGER,
+  }).safeParse(manifestJson);
   if (!manifestResult.success) {
     s.stop('Invalid manifest');
     p.log.error(
-      `Skill manifest failed validation: ${manifestResult.error.flatten().formErrors.join(', ')}`
+      `Skill manifest failed validation: ${manifestResult.error.issues.map((i) => i.message).join(', ')}`
     );
     p.outro(pc.red('Installation failed'));
     process.exit(1);
