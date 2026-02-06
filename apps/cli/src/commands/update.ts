@@ -1,15 +1,19 @@
+import * as p from '@clack/prompts';
+import pc from 'picocolors';
 import { loadIndex, getInstalledSkill } from '../config';
 import { getSkillByRef } from '../api';
 import { add } from './add';
 
 export async function update(skillRef?: string): Promise<void> {
+  p.intro(pc.bgCyan(pc.black(' vett update ')));
+
   const index = loadIndex();
 
   if (skillRef) {
-    // Update specific skill
     const parts = skillRef.split('/');
     if (parts.length !== 3) {
-      console.error('Invalid skill reference. Format: owner/repo/skill');
+      p.log.error('Invalid skill reference. Format: owner/repo/skill');
+      p.outro(pc.red('Failed'));
       process.exit(1);
     }
 
@@ -17,21 +21,23 @@ export async function update(skillRef?: string): Promise<void> {
     const installed = getInstalledSkill(owner, repo, name);
 
     if (!installed) {
-      console.error(`Skill not installed: ${skillRef}`);
+      p.log.error(`Skill not installed: ${skillRef}`);
+      p.outro(pc.red('Failed'));
       process.exit(1);
     }
 
     await updateSkill(owner, repo, name, installed.version);
   } else {
-    // Update all skills
     const skills = index.installedSkills;
 
     if (skills.length === 0) {
-      console.log('No skills installed.');
+      p.log.warn('No skills installed.');
+      p.outro(pc.dim('Nothing to update'));
       return;
     }
 
-    console.log(`Checking ${skills.length} skill(s) for updates...\n`);
+    const s = p.spinner();
+    s.start(`Checking ${skills.length} skill${skills.length === 1 ? '' : 's'} for updates`);
 
     let updated = 0;
     for (const skill of skills) {
@@ -39,8 +45,16 @@ export async function update(skillRef?: string): Promise<void> {
       if (didUpdate) updated++;
     }
 
-    console.log(`\nUpdated ${updated} skill(s)`);
+    s.stop(`Checked ${skills.length} skill${skills.length === 1 ? '' : 's'}`);
+
+    if (updated > 0) {
+      p.log.success(`Updated ${updated} skill${updated === 1 ? '' : 's'}`);
+    } else {
+      p.log.info('All skills are up to date');
+    }
   }
+
+  p.outro(pc.dim('Done'));
 }
 
 async function updateSkill(
@@ -54,26 +68,26 @@ async function updateSkill(
   try {
     const skill = await getSkillByRef(owner, repo, name);
     if (!skill) {
-      console.log(`${ref}: not found in registry`);
+      p.log.warn(`${ref}: not found in registry`);
       return false;
     }
 
     const latestVersion = skill.versions[0]?.version;
     if (!latestVersion) {
-      console.log(`${ref}: no versions available`);
+      p.log.warn(`${ref}: no versions available`);
       return false;
     }
 
     if (latestVersion === currentVersion) {
-      console.log(`${ref}: up to date (${currentVersion})`);
+      p.log.info(pc.dim(`${ref}: up to date (${currentVersion})`));
       return false;
     }
 
-    console.log(`${ref}: updating ${currentVersion} -> ${latestVersion}`);
+    p.log.step(`${ref}: ${currentVersion} ${pc.dim('->')} ${latestVersion}`);
     await add(ref, { force: true, yes: true });
     return true;
   } catch (error) {
-    console.error(`${ref}: failed to update - ${(error as Error).message}`);
+    p.log.error(`${ref}: failed to update - ${(error as Error).message}`);
     return false;
   }
 }

@@ -28,8 +28,8 @@ export async function listAgents(): Promise<void> {
     for (const agentType of installed) {
       const agent = agents[agentType];
       const globalPath = agent.globalSkillsDir || '(project-only)';
-      console.log(`  ${pc.green('✓')} ${pc.bold(agent.displayName)}`);
-      console.log(`    ${pc.dim(globalPath)}`);
+      p.log.message(`  ${pc.green('✓')} ${pc.bold(agent.displayName)}`);
+      p.log.message(`    ${pc.dim(globalPath)}`);
     }
   } else {
     p.log.warn('No supported agents detected');
@@ -37,17 +37,16 @@ export async function listAgents(): Promise<void> {
 
   // Display not installed agents (collapsed)
   if (notInstalled.length > 0) {
-    console.log('');
     p.log.info(pc.dim(`${notInstalled.length} other supported agents not detected`));
 
     // Show first few as examples
     const examples = notInstalled.slice(0, 5);
     for (const agentType of examples) {
       const agent = agents[agentType];
-      console.log(`  ${pc.dim('·')} ${pc.dim(agent.displayName)}`);
+      p.log.message(`  ${pc.dim('·')} ${pc.dim(agent.displayName)}`);
     }
     if (notInstalled.length > 5) {
-      console.log(`  ${pc.dim(`... and ${notInstalled.length - 5} more`)}`);
+      p.log.message(pc.dim(`  ... and ${notInstalled.length - 5} more`));
     }
   }
 

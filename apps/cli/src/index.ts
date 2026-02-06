@@ -8,8 +8,11 @@ import { remove } from './commands/remove';
 import { sync } from './commands/sync';
 import { listAgents } from './commands/agents';
 import { trackCommand, trackError } from './telemetry';
+import { capTerminalWidth } from './terminal';
 
 declare const __VERSION__: string;
+
+capTerminalWidth();
 
 program
   .name('vett')

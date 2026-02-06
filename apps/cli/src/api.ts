@@ -2,7 +2,13 @@ import { loadConfig } from './config';
 import { skillManifestSchema } from '@vett/core';
 import { computeManifestHash as computeManifestHashCore } from '@vett/core/manifest-hash';
 import { createHash } from 'node:crypto';
-import type { Skill, SkillDetail, SkillVersion, SkillManifest } from '@vett/core';
+import type {
+  Skill,
+  SkillWithLatestVersion,
+  SkillDetail,
+  SkillVersion,
+  SkillManifest,
+} from '@vett/core';
 
 /**
  * Error thrown when the API rate limit is exceeded.
@@ -25,7 +31,7 @@ declare const __VERSION__: string;
 const CLI_VERSION = __VERSION__;
 
 interface SearchResponse {
-  skills: Skill[];
+  skills: SkillWithLatestVersion[];
   pagination: {
     limit: number;
     offset: number;
@@ -120,7 +126,7 @@ async function fetchJsonOrNull<T>(path: string, options: RequestInit = {}): Prom
   return response.json() as Promise<T>;
 }
 
-export async function searchSkills(query?: string): Promise<Skill[]> {
+export async function searchSkills(query?: string): Promise<SkillWithLatestVersion[]> {
   const params = new URLSearchParams();
   if (query) {
     params.set('q', query);

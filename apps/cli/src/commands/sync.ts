@@ -93,19 +93,18 @@ export async function sync(options: { fix?: boolean; addNew?: boolean }): Promis
     p.log.warn(`Found ${issues.length} issue${issues.length === 1 ? '' : 's'}:`);
     for (const issue of issues) {
       const agentName = agents[issue.agent]?.displayName || issue.agent;
-      const issueType =
+      const issueDesc =
         issue.issue === 'missing'
-          ? pc.yellow('missing')
+          ? pc.yellow('not installed')
           : issue.issue === 'broken'
-            ? pc.red('broken')
-            : pc.yellow('wrong target');
-      console.log(`  · ${issue.skill.name} → ${agentName}: ${issueType}`);
+            ? pc.red('link broken (source removed)')
+            : pc.yellow('outdated (points to old version)');
+      p.log.message(`  · ${issue.skill.name} → ${agentName}: ${issueDesc}`);
     }
   }
 
   // Show new agent opportunities
   if (newAgentSkills.length > 0) {
-    console.log();
     p.log.info(`${newAgentSkills.length} skill(s) can be added to newly detected agents`);
     const grouped = new Map<string, AgentType[]>();
     for (const { skill, agent } of newAgentSkills) {
@@ -115,13 +114,12 @@ export async function sync(options: { fix?: boolean; addNew?: boolean }): Promis
     }
     for (const [skillRef, agentTypes] of grouped) {
       const agentNames = agentTypes.map((a) => agents[a]?.displayName || a).join(', ');
-      console.log(`  · ${skillRef} → ${pc.dim(agentNames)}`);
+      p.log.message(`  · ${skillRef} → ${pc.dim(agentNames)}`);
     }
   }
 
   // Fix issues if requested
   if (!options.fix) {
-    console.log();
     p.log.info(`Run ${pc.cyan('vett sync --fix')} to repair issues`);
     if (newAgentSkills.length > 0) {
       p.log.info(`Run ${pc.cyan('vett sync --fix --add-new')} to also install to new agents`);
@@ -131,7 +129,6 @@ export async function sync(options: { fix?: boolean; addNew?: boolean }): Promis
   }
 
   // Fix mode
-  console.log();
   s.start('Fixing issues');
 
   let fixed = 0;
