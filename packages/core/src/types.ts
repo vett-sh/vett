@@ -61,6 +61,7 @@ export interface SkillVersion {
   analysis: AnalysisResult | null;
   gitRef: string | null;
   commitSha: string | null;
+  sourceFingerprint: string | null;
   sigstoreBundle: unknown | null;
   analyzedAt: Date | null;
   scanStatus: ScanStatus;

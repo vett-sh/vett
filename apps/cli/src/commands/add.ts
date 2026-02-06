@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, normalize, sep } from 'node:path';
 import * as p from '@clack/prompts';
@@ -12,7 +13,7 @@ import {
 } from '../api';
 import { getSkillDir, addInstalledSkill, getInstalledSkill } from '../config';
 import { verifyManifestOrThrow } from '../signatures';
-import { createSkillManifestSchema, skillRefSchema } from '@vett/core';
+import { createSkillManifestSchema, skillRefSchema, parseSkillUrl } from '@vett/core';
 import type {
   AnalysisResult,
   RiskLevel,
@@ -235,6 +236,59 @@ function assertPathWithinBase(baseDir: string, filePath: string): string {
 }
 
 /**
+ * Extract a commit SHA from a parsed ref, returning null for branch/tag refs.
+ * Only matches full 40-char hex SHAs to avoid misidentifying hex-only
+ * branch or tag names (e.g. "cafebabe", "deadbeef") as commit refs.
+ */
+function extractCommitRef(ref: string | undefined): string | null {
+  if (!ref) return null;
+  return /^[0-9a-f]{40}$/i.test(ref) ? ref.toLowerCase() : null;
+}
+
+/**
+ * Resolve the current source fingerprint for a URL.
+ * - Git hosts: latest commit SHA touching the skill path.
+ * - HTTP: SHA-256 of the raw content.
+ * Returns null if the check fails (network error, rate limit, etc.).
+ */
+async function resolveCurrentFingerprint(
+  parsedUrl: ReturnType<typeof parseSkillUrl>
+): Promise<string | null> {
+  try {
+    if (
+      (parsedUrl.host === 'github.com' || parsedUrl.host === 'gitlab.com') &&
+      parsedUrl.owner &&
+      parsedUrl.repo &&
+      parsedUrl.path
+    ) {
+      if (parsedUrl.host === 'github.com') {
+        const ref = parsedUrl.ref ?? 'main';
+        const url = `https://api.github.com/repos/${parsedUrl.owner}/${parsedUrl.repo}/commits?path=${encodeURIComponent(parsedUrl.path)}&sha=${encodeURIComponent(ref)}&per_page=1`;
+        const res = await fetch(url, {
+          headers: { Accept: 'application/vnd.github.v3+json' },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok) return null;
+        const data = (await res.json()) as Array<{ sha?: string }>;
+        return data[0]?.sha ?? null;
+      }
+      // GitLab: fall through to content hash
+    }
+
+    // HTTP sources: fetch content and hash it
+    const res = await fetch(parsedUrl.sourceUrl, {
+      headers: { 'User-Agent': 'vett-cli' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return null;
+    const content = await res.text();
+    return createHash('sha256').update(content).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Install skill files from manifest
  */
 function installSkillFiles(manifest: SkillManifest, skillDir: string): void {
@@ -283,7 +337,30 @@ export async function add(
     } else {
       const skill = await getSkillByUrl(parsed.url);
       if (skill) {
-        resolved = { skill: toSkillInfo(skill), version: toVersionInfo(selectVersion(skill)) };
+        const parsedUrl = parseSkillUrl(parsed.url);
+        const commitSha = extractCommitRef(parsedUrl.ref);
+
+        if (commitSha) {
+          // Pinned to a specific commit — find that exact version
+          const match = skill.versions.find((v) => v.commitSha === commitSha);
+          if (match) {
+            resolved = { skill: toSkillInfo(skill), version: toVersionInfo(match) };
+          }
+          // else: specific commit not yet ingested — fall through to ingestion
+        } else {
+          // Non-pinned URL — check if source has changed since last ingest
+          const currentFingerprint = await resolveCurrentFingerprint(parsedUrl);
+          const latest = selectVersion(skill);
+          if (
+            currentFingerprint &&
+            latest.sourceFingerprint &&
+            currentFingerprint === latest.sourceFingerprint
+          ) {
+            // Source unchanged — use cached version
+            resolved = { skill: toSkillInfo(skill), version: toVersionInfo(latest) };
+          }
+          // else: source changed or no fingerprint — fall through to ingestion
+        }
       }
     }
   } catch (error) {

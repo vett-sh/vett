@@ -25,6 +25,7 @@ export const skillVersionSchema = z.object({
   analysis: z.unknown().nullable(), // Full AnalysisResult, validated by scanner
   gitRef: z.string().max(255).nullable(),
   commitSha: z.string().length(40).nullable(),
+  sourceFingerprint: z.string().max(64).nullable(),
   sigstoreBundle: z.unknown().nullable(),
   analyzedAt: z.coerce.date().nullable(),
   scanStatus: z.enum(SCAN_STATUSES),
