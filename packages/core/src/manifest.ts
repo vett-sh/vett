@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const SKILL_MANIFEST_SCHEMA_VERSION = 1 as const;
 
 export const DEFAULT_MAX_SKILL_FILE_BYTES = 256 * 1024; // 256 KiB
-export const DEFAULT_MAX_SKILL_TOTAL_BYTES = 1024 * 1024; // 1 MiB
+export const DEFAULT_MAX_SKILL_TOTAL_BYTES = 1536 * 1024; // 1.5 MiB
 
 export interface SkillSizeLimits {
   maxFileBytes: number;
