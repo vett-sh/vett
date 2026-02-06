@@ -7,6 +7,7 @@ import { update } from './commands/update';
 import { remove } from './commands/remove';
 import { sync } from './commands/sync';
 import { listAgents } from './commands/agents';
+import { trackCommand, trackError } from './telemetry';
 
 declare const __VERSION__: string;
 
@@ -20,6 +21,26 @@ function collect(value: string, previous: string[]): string[] {
   return previous.concat([value]);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function withTelemetry(commandName: string, fn: (...args: any[]) => Promise<void>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return async (...args: any[]): Promise<void> => {
+    const start = performance.now();
+    let success = true;
+    try {
+      await fn(...args);
+    } catch (err) {
+      success = false;
+      trackError({ command: commandName, error: err });
+      throw err;
+    } finally {
+      trackCommand({ command: commandName, duration_ms: performance.now() - start, success });
+      // Yield to let the fire-and-forget fetch initiate before Node exits
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  };
+}
+
 program
   .command('add <input>')
   .description('Add a skill from URL or ref (registry-first, then analyze/install)')
@@ -28,18 +49,24 @@ program
   .option('-g, --global', 'Install globally (default)')
   .option('-p, --project', 'Install to current project only')
   .option('-a, --agent <agent>', 'Target specific agent(s)', collect, [])
-  .action(add);
+  .action(withTelemetry('add', add));
 
-program.command('search <query>').description('Search for skills').action(search);
+program
+  .command('search <query>')
+  .description('Search for skills')
+  .action(withTelemetry('search', search));
 
-program.command('info <skill>').description('Show detailed information about a skill').action(info);
+program
+  .command('info <skill>')
+  .description('Show detailed information about a skill')
+  .action(withTelemetry('info', info));
 
-program.command('list').description('List installed skills').action(list);
+program.command('list').description('List installed skills').action(withTelemetry('list', list));
 
 program
   .command('update [skill]')
   .description('Update installed skill(s) to latest version')
-  .action(update);
+  .action(withTelemetry('update', update));
 
 program
   .command('remove <skill>')
@@ -47,15 +74,18 @@ program
   .description('Remove an installed skill')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Show what would be removed without deleting')
-  .action(remove);
+  .action(withTelemetry('remove', remove));
 
 program
   .command('sync')
   .description('Check and repair agent symlinks')
   .option('--fix', 'Repair broken/missing symlinks')
   .option('--add-new', 'Also install to newly detected agents (requires --fix)')
-  .action(sync);
+  .action(withTelemetry('sync', sync));
 
-program.command('agents').description('List detected AI coding agents').action(listAgents);
+program
+  .command('agents')
+  .description('List detected AI coding agents')
+  .action(withTelemetry('agents', listAgents));
 
 program.parse();

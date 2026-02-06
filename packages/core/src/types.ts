@@ -96,6 +96,7 @@ export interface VettConfig {
   registryUrl: string;
   telemetry: {
     enabled: boolean;
+    deviceId?: string;
   };
 }
 

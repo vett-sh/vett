@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import type { VettConfig, VettIndex, InstalledSkill } from '@vett/core';
 
 const CONFIG_DIR = join(homedir(), '.vett');
@@ -124,7 +125,13 @@ function normalizeConfig(raw: unknown): {
   let legacyInstalledSkills: InstalledSkill[] | undefined;
 
   if (!isRecord(raw)) {
-    return { config: DEFAULT_CONFIG, changed: true };
+    return {
+      config: {
+        ...DEFAULT_CONFIG,
+        telemetry: { ...DEFAULT_CONFIG.telemetry, deviceId: randomUUID() },
+      },
+      changed: true,
+    };
   }
 
   if (Array.isArray(raw.installedSkills)) {
@@ -145,13 +152,25 @@ function normalizeConfig(raw: unknown): {
   if (raw.registryUrl !== undefined && typeof raw.registryUrl !== 'string') changed = true;
 
   let telemetryEnabled = DEFAULT_CONFIG.telemetry.enabled;
+  let deviceId: string | undefined;
   if (isRecord(raw.telemetry)) {
     if (typeof raw.telemetry.enabled === 'boolean') {
       telemetryEnabled = raw.telemetry.enabled;
     } else if (raw.telemetry.enabled !== undefined) {
       changed = true;
     }
+    if (
+      typeof raw.telemetry.deviceId === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw.telemetry.deviceId)
+    ) {
+      deviceId = raw.telemetry.deviceId;
+    }
   } else if (raw.telemetry !== undefined) {
+    changed = true;
+  }
+
+  if (!deviceId) {
+    deviceId = randomUUID();
     changed = true;
   }
 
@@ -162,6 +181,7 @@ function normalizeConfig(raw: unknown): {
       registryUrl,
       telemetry: {
         enabled: telemetryEnabled,
+        deviceId,
       },
     },
     legacyInstalledSkills,
@@ -328,4 +348,8 @@ export function getInstalledSkill(
 
 export function isTelemetryEnabled(): boolean {
   return loadConfig().telemetry.enabled;
+}
+
+export function getDeviceId(): string {
+  return loadConfig().telemetry.deviceId!;
 }

@@ -132,6 +132,85 @@ describe('config storage', () => {
     }
   });
 
+  it('generates a deviceId on first load', async () => {
+    const { loadConfig } = await loadConfigModule();
+    const config = loadConfig();
+
+    expect(config.telemetry.deviceId).toBeDefined();
+    expect(config.telemetry.deviceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    );
+  });
+
+  it('persists deviceId to config.json', async () => {
+    const { loadConfig } = await loadConfigModule();
+    const config = loadConfig();
+
+    const configPath = join(tempHome, '.vett', 'config.json');
+    const data = readJson(configPath) as { telemetry?: { deviceId?: string } };
+
+    expect(data.telemetry?.deviceId).toBe(config.telemetry.deviceId);
+  });
+
+  it('returns the same deviceId on subsequent loads', async () => {
+    const { loadConfig } = await loadConfigModule();
+    const first = loadConfig();
+    const second = loadConfig();
+
+    expect(second.telemetry.deviceId).toBe(first.telemetry.deviceId);
+  });
+
+  it('replaces invalid deviceId with a new UUID', async () => {
+    const configDir = join(tempHome, '.vett');
+    mkdirSync(configDir, { recursive: true });
+
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        installDir: join(tempHome, '.vett', 'skills'),
+        registryUrl: 'https://vett.sh',
+        telemetry: { enabled: true, deviceId: 'not-a-uuid' },
+      })
+    );
+
+    const { loadConfig } = await loadConfigModule();
+    const config = loadConfig();
+
+    expect(config.telemetry.deviceId).not.toBe('not-a-uuid');
+    expect(config.telemetry.deviceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    );
+  });
+
+  it('preserves a valid deviceId from existing config', async () => {
+    const configDir = join(tempHome, '.vett');
+    mkdirSync(configDir, { recursive: true });
+
+    const existingId = '550e8400-e29b-41d4-a716-446655440000';
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        installDir: join(tempHome, '.vett', 'skills'),
+        registryUrl: 'https://vett.sh',
+        telemetry: { enabled: true, deviceId: existingId },
+      })
+    );
+
+    const { loadConfig } = await loadConfigModule();
+    const config = loadConfig();
+
+    expect(config.telemetry.deviceId).toBe(existingId);
+  });
+
+  it('getDeviceId returns the generated deviceId', async () => {
+    const { loadConfig, getDeviceId } = await loadConfigModule();
+    const config = loadConfig();
+
+    expect(getDeviceId()).toBe(config.telemetry.deviceId);
+  });
+
   it('clears stale lock files', async () => {
     const { saveConfig } = await loadConfigModule();
 
