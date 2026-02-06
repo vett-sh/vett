@@ -69,6 +69,50 @@ interface ResolvedResult {
   version: VersionInfo;
 }
 
+async function resolveFromPublicRegistry(
+  ingestUrl: string,
+  expectedRef: { owner?: string; repo?: string; name?: string }
+): Promise<ResolvedResult> {
+  // Prefer URL lookup (works even if repo/name parsing changes); fall back to name lookup if present.
+  const byUrl = await getSkillByUrl(ingestUrl);
+  const skill: SkillDetail | null =
+    byUrl ??
+    (expectedRef.owner && expectedRef.repo && expectedRef.name
+      ? await getSkillByRef(expectedRef.owner, expectedRef.repo, expectedRef.name)
+      : null);
+
+  if (!skill || !skill.versions || skill.versions.length === 0) {
+    throw new Error('Skill not found in registry after ingestion completed');
+  }
+
+  // The API returns versions sorted newest-first; take the latest.
+  const version: SkillVersion = skill.versions[0]!;
+  return {
+    skill: toSkillInfo(skill),
+    version: toVersionInfo(version),
+  };
+}
+
+async function resolveFromRegistryWithRetries(
+  ingestUrl: string,
+  expectedRef: { owner?: string; repo?: string; name?: string }
+): Promise<ResolvedResult> {
+  // Ingest job may flip to "complete" slightly before the skill/version is queryable.
+  const deadline = Date.now() + 10_000;
+  let lastError: Error | null = null;
+
+  while (Date.now() < deadline) {
+    try {
+      return await resolveFromPublicRegistry(ingestUrl, expectedRef);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error('Failed to resolve from registry');
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+
+  throw lastError ?? new Error('Failed to resolve from registry');
+}
+
 function formatSkillInfo(result: ResolvedResult): string {
   const { skill, version } = result;
   const analysis = version.analysis;
@@ -311,26 +355,13 @@ export async function add(
         p.log.info(pc.dim(`Analysis completed in ${seconds}s`));
       }
     }
-
-    const jobResult = job.result!;
-    resolved = {
-      skill: {
-        owner: jobResult.skill.owner,
-        repo: jobResult.skill.repo,
-        name: jobResult.skill.name,
-        description: jobResult.skill.description,
-      },
-      version: {
-        version: jobResult.version.version,
-        hash: jobResult.version.hash,
-        artifactUrl: jobResult.version.artifactUrl,
-        size: jobResult.version.size,
-        risk: jobResult.version.risk as RiskLevel | null,
-        summary: jobResult.version.summary,
-        analysis: jobResult.version.analysis,
-        sigstoreBundle: jobResult.version.sigstoreBundle ?? null,
-      },
-    };
+    // Resolve result via public registry endpoints rather than embedding results in job payload.
+    // This reduces jobId-based information disclosure and keeps the CLI aligned with canonical API data.
+    resolved = await resolveFromRegistryWithRetries(ingestUrl, {
+      owner: parsed.kind === 'ref' ? parsed.owner : undefined,
+      repo: parsed.kind === 'ref' ? parsed.repo : undefined,
+      name: parsed.kind === 'ref' ? parsed.name : undefined,
+    });
   }
 
   const verdict = getVerdict(resolved.version.risk as RiskLevel);

@@ -2,7 +2,7 @@ import { loadConfig } from './config';
 import { skillManifestSchema } from '@vett/core';
 import { computeManifestHash as computeManifestHashCore } from '@vett/core/manifest-hash';
 import { createHash } from 'node:crypto';
-import type { Skill, SkillDetail, SkillVersion, AnalysisResult, SkillManifest } from '@vett/core';
+import type { Skill, SkillDetail, SkillVersion, SkillManifest } from '@vett/core';
 
 /**
  * Error thrown when the API rate limit is exceeded.
@@ -42,35 +42,11 @@ export interface IngestResponse {
 
 export interface JobResponse {
   id: string;
-  url: string;
-  skillId: string;
   status: 'pending' | 'processing' | 'complete' | 'failed';
   error?: string;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
-  result?: {
-    skill: {
-      id: string;
-      owner: string;
-      repo: string;
-      name: string;
-      description: string | null;
-      source: string;
-      sourceUrl: string | null;
-    };
-    version: {
-      id: string;
-      version: string;
-      hash: string;
-      artifactUrl: string;
-      size: number;
-      risk: string | null;
-      summary: string | null;
-      analysis: AnalysisResult | null;
-      sigstoreBundle: unknown | null;
-    };
-  };
 }
 
 function getBaseUrl(): string {
