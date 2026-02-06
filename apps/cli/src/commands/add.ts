@@ -255,24 +255,16 @@ async function resolveCurrentFingerprint(
   parsedUrl: ReturnType<typeof parseSkillUrl>
 ): Promise<string | null> {
   try {
-    if (
-      (parsedUrl.host === 'github.com' || parsedUrl.host === 'gitlab.com') &&
-      parsedUrl.owner &&
-      parsedUrl.repo &&
-      parsedUrl.path
-    ) {
-      if (parsedUrl.host === 'github.com') {
-        const ref = parsedUrl.ref ?? 'main';
-        const url = `https://api.github.com/repos/${parsedUrl.owner}/${parsedUrl.repo}/commits?path=${encodeURIComponent(parsedUrl.path)}&sha=${encodeURIComponent(ref)}&per_page=1`;
-        const res = await fetch(url, {
-          headers: { Accept: 'application/vnd.github.v3+json' },
-          signal: AbortSignal.timeout(10_000),
-        });
-        if (!res.ok) return null;
-        const data = (await res.json()) as Array<{ sha?: string }>;
-        return data[0]?.sha ?? null;
-      }
-      // GitLab: fall through to content hash
+    if (parsedUrl.host === 'github.com' && parsedUrl.owner && parsedUrl.repo && parsedUrl.path) {
+      const ref = parsedUrl.ref ?? 'main';
+      const url = `https://api.github.com/repos/${parsedUrl.owner}/${parsedUrl.repo}/commits?path=${encodeURIComponent(parsedUrl.path)}&sha=${encodeURIComponent(ref)}&per_page=1`;
+      const res = await fetch(url, {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as Array<{ sha?: string }>;
+      return data[0]?.sha ?? null;
     }
 
     // HTTP sources: fetch content and hash it

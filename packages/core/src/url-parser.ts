@@ -2,11 +2,11 @@
  * URL parser for skill sources
  *
  * Normalizes any skill source URL to a canonical Vett ID.
- * Supports GitHub, GitLab, and arbitrary HTTP sources.
+ * Supports GitHub and arbitrary HTTP sources.
  */
 
 export interface ParsedSkillUrl {
-  /** Host domain (github.com, gitlab.com, moltbook.com) */
+  /** Host domain (github.com, examplehost.com) */
   host: string;
   /** Full normalized ID (github.com/owner/repo/skill) */
   id: string;
@@ -24,7 +24,7 @@ export interface ParsedSkillUrl {
   sourceUrl: string;
 }
 
-export type SkillHost = 'github.com' | 'gitlab.com' | 'other';
+export type SkillHost = 'github.com' | 'other';
 
 /**
  * Parse and normalize a skill source URL
@@ -63,7 +63,7 @@ export function parseSkillUrl(url: string): ParsedSkillUrl {
   const pathParts = parsed.pathname.split('/').filter(Boolean);
 
   // Route to host-specific parser
-  if (host === 'github.com' || host === 'gitlab.com') {
+  if (host === 'github.com') {
     return parseGitHostUrl(host, pathParts, sourceUrl);
   }
 
@@ -88,7 +88,7 @@ function convertSshToHttps(sshUrl: string): string {
  */
 function inferProtocol(url: string): string {
   // Known git hosts
-  if (url.startsWith('github.com/') || url.startsWith('gitlab.com/')) {
+  if (url.startsWith('github.com/')) {
     return `https://${url}`;
   }
 
@@ -109,7 +109,7 @@ function normalizeHost(host: string): string {
 }
 
 /**
- * Parse GitHub/GitLab URLs
+ * Parse GitHub URLs
  *
  * Formats:
  * - github.com/owner/repo
@@ -117,7 +117,7 @@ function normalizeHost(host: string): string {
  * - github.com/owner/repo/blob/main/SKILL.md
  */
 function parseGitHostUrl(
-  host: 'github.com' | 'gitlab.com',
+  host: 'github.com',
   pathParts: string[],
   sourceUrl: string
 ): ParsedSkillUrl {
@@ -190,7 +190,7 @@ function parseHttpUrl(host: string, pathParts: string[], sourceUrl: string): Par
     normalized[normalized.length - 1] = last.replace(/\.md$/, '');
   }
 
-  const hostBase = host.split('.')[0]; // moltbook.com -> moltbook
+  const hostBase = host.split('.')[0]; // expample.com -> moltbook
 
   let repo: string;
   let skill: string;
@@ -276,7 +276,6 @@ function normalizeSkillPath(parts: string[]): string {
  */
 export function getHostType(parsed: ParsedSkillUrl): SkillHost {
   if (parsed.host === 'github.com') return 'github.com';
-  if (parsed.host === 'gitlab.com') return 'gitlab.com';
   return 'other';
 }
 
