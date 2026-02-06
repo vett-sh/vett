@@ -22,6 +22,7 @@ import type {
 } from '@vett/core';
 import { detectInstalledAgents, parseAgentTypes, agents, type AgentType } from '../agents';
 import { installToAgents } from '../installer';
+import { assertNoSymlinkPathComponents } from '../lib/fs-safety';
 
 /**
  * Format bytes to human readable
@@ -198,6 +199,8 @@ function installSkillFiles(manifest: SkillManifest, skillDir: string): void {
   for (const file of manifest.files) {
     // Validate path doesn't escape skill directory (defense in depth)
     const filePath = assertPathWithinBase(skillDir, file.path);
+    // Prevent writes through pre-existing symlinks inside the destination tree.
+    assertNoSymlinkPathComponents(skillDir, file.path);
     mkdirSync(join(filePath, '..'), { recursive: true });
     writeFileSync(filePath, file.content, 'utf-8');
   }
