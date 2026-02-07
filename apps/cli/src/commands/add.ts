@@ -394,6 +394,10 @@ export async function add(
     try {
       job = await waitForJob(ingestResponse.jobId, {
         onProgress: (statusJob) => {
+          if (statusJob.message) {
+            s.message(statusJob.message);
+            return;
+          }
           if (statusJob.status === 'processing') {
             s.message('Analyzing skill');
           } else if (statusJob.status === 'pending') {
@@ -411,7 +415,7 @@ export async function add(
     // Handle failure
     if (job.status === 'failed') {
       s.stop('Analysis failed');
-      p.log.error(job.error || 'Unknown error');
+      p.log.error(job.message || job.error || 'Unknown error');
       p.outro(pc.red('Installation failed'));
       process.exit(1);
     }

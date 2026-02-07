@@ -49,6 +49,8 @@ export interface IngestResponse {
 export interface JobResponse {
   id: string;
   status: 'pending' | 'processing' | 'complete' | 'failed';
+  stage?: string;
+  message?: string;
   error?: string;
   createdAt: string;
   startedAt?: string;
@@ -88,8 +90,12 @@ async function fetchJson<T>(path: string, options: RequestInit = {}): Promise<T>
   if (!response.ok) {
     const errorBody = (await response.json().catch(() => ({ error: 'Unknown error' }))) as {
       error?: string;
+      details?: string;
     };
-    throw new Error(errorBody.error || `HTTP ${response.status}`);
+    const msg =
+      (errorBody.error || `HTTP ${response.status}`) +
+      (errorBody.details ? `: ${errorBody.details}` : '');
+    throw new Error(msg);
   }
 
   return response.json() as Promise<T>;
@@ -119,8 +125,12 @@ async function fetchJsonOrNull<T>(path: string, options: RequestInit = {}): Prom
   if (!response.ok) {
     const errorBody = (await response.json().catch(() => ({ error: 'Unknown error' }))) as {
       error?: string;
+      details?: string;
     };
-    throw new Error(errorBody.error || `HTTP ${response.status}`);
+    const msg =
+      (errorBody.error || `HTTP ${response.status}`) +
+      (errorBody.details ? `: ${errorBody.details}` : '');
+    throw new Error(msg);
   }
 
   return response.json() as Promise<T>;
