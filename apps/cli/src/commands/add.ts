@@ -391,6 +391,7 @@ export async function add(
     // Poll for completion
     s.start('Analyzing skill');
     let job;
+    const pollStart = Date.now();
     try {
       job = await waitForJob(ingestResponse.jobId, {
         onProgress: (statusJob) => {
@@ -401,7 +402,10 @@ export async function add(
           if (statusJob.status === 'processing') {
             s.message('Analyzing skill');
           } else if (statusJob.status === 'pending') {
-            s.message('Waiting for analysis to start');
+            const elapsed = Date.now() - pollStart;
+            s.message(
+              elapsed > 15_000 ? 'Waiting for available slot...' : 'Waiting for analysis to start'
+            );
           }
         },
       });

@@ -220,7 +220,7 @@ export async function waitForJob(
   jobId: string,
   options: { interval?: number; timeout?: number; onProgress?: (job: JobResponse) => void } = {}
 ): Promise<JobResponse> {
-  const { interval = 1000, timeout = 120000, onProgress } = options;
+  const { timeout = 180_000, onProgress } = options;
   const start = Date.now();
 
   while (Date.now() - start < timeout) {
@@ -234,10 +234,15 @@ export async function waitForJob(
       return job;
     }
 
+    // Adaptive polling: 1s for first 30s, then 3s to reduce load during waits
+    const elapsed = Date.now() - start;
+    const interval = elapsed < 30_000 ? 1_000 : 3_000;
     await new Promise((resolve) => setTimeout(resolve, interval));
   }
 
-  throw new Error('Job timed out');
+  throw new Error(
+    `Analysis is taking longer than expected. Your job (ID: ${jobId}) is still processing server-side — try again shortly.`
+  );
 }
 
 /**
