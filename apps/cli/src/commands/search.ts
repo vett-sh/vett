@@ -36,7 +36,7 @@ function formatSkillNote(skill: SkillWithLatestVersion): string {
   const risk = formatRisk(skill.latestVersion?.risk as RiskLevel | null);
   const installs = formatInstalls(skill.installCount);
 
-  lines.push(`${risk} ${pc.dim('·')} ${installs} installs ${pc.dim('·')} ${skill.source}`);
+  lines.push(`${risk} ${pc.dim('·')} ${installs} installs`);
 
   if (skill.description) {
     lines.push('');
@@ -79,7 +79,7 @@ export async function search(query: string): Promise<void> {
     const ref = `${skill.owner}/${skill.repo}/${pc.bold(skill.name)}`;
     const risk = formatRisk(skill.latestVersion?.risk as RiskLevel | null);
     const installs = formatInstalls(skill.installCount);
-    const meta = pc.dim(`${installs} · ${skill.source} ·`) + ` ${risk}`;
+    const meta = pc.dim(`${installs} ·`) + ` ${risk}`;
     const desc = skill.description
       ? `\n    ${pc.dim(truncate(skill.description, labelWidth - 4))}`
       : '';

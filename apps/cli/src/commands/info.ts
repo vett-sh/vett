@@ -73,7 +73,6 @@ export async function info(skillRef: string): Promise<void> {
     lines.push('');
   }
 
-  lines.push(`${pc.dim('Source:')}   ${skill.source}`);
   lines.push(`${pc.dim('Installs:')} ${skill.installCount.toLocaleString()}`);
   if (installed) {
     lines.push(`${pc.dim('Installed:')} ${installed.version} ${pc.dim(`(${installed.path})`)}`);

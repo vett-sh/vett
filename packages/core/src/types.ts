@@ -1,4 +1,4 @@
-import type { ScanStatus, SkillSource, RiskLevel } from './constants';
+import type { ScanStatus, RiskLevel } from './constants';
 
 // Issue types for security analysis
 export const ISSUE_TYPES = [
@@ -42,7 +42,6 @@ export interface Skill {
   repo: string;
   name: string;
   description: string | null;
-  source: SkillSource;
   sourceUrl: string | null;
   installCount: number;
   createdAt: Date;

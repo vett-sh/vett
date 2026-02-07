@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SCAN_STATUSES, SKILL_SOURCES, RISK_LEVELS } from './constants';
+import { SCAN_STATUSES, RISK_LEVELS } from './constants';
 
 export const skillSchema = z.object({
   id: z.string().uuid(),
@@ -7,7 +7,6 @@ export const skillSchema = z.object({
   repo: z.string().min(1).max(100),
   name: z.string().min(1).max(200),
   description: z.string().max(1000).nullable(),
-  source: z.enum(SKILL_SOURCES),
   installCount: z.number().int().min(0),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
@@ -39,7 +38,6 @@ export type SortOption = (typeof SORT_OPTIONS)[number];
 // Query schemas
 export const searchQuerySchema = z.object({
   q: z.string().optional(),
-  source: z.enum(SKILL_SOURCES).optional(),
   risk: z
     .string()
     .optional()

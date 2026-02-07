@@ -67,6 +67,10 @@ export function parseSkillUrl(url: string): ParsedSkillUrl {
     return parseGitHostUrl(host, pathParts, sourceUrl);
   }
 
+  if (host === 'clawhub.ai') {
+    return parseClawHubUrl(parsed, sourceUrl);
+  }
+
   return parseHttpUrl(host, pathParts, sourceUrl);
 }
 
@@ -165,6 +169,53 @@ function parseGitHostUrl(
     skill: skill || undefined,
     path,
     ref,
+    sourceUrl,
+  };
+}
+
+/**
+ * Parse ClawHub registry URLs
+ *
+ * Formats:
+ * - clawhub.ai/{owner}/{slug}              (site URL — preferred)
+ * - clawhub.ai/api/v1/download?slug=...    (download URL — legacy)
+ *
+ * Site URLs contain the owner handle in the path. Download URLs only have
+ * the slug as a query param and no owner info.
+ */
+function parseClawHubUrl(parsed: URL, sourceUrl: string): ParsedSkillUrl {
+  const pathParts = parsed.pathname.split('/').filter(Boolean);
+
+  // Site URL: clawhub.ai/{owner}/{slug}
+  if (pathParts.length === 2 && pathParts[0] !== 'api') {
+    const [owner, slug] = pathParts;
+    return {
+      host: 'clawhub.ai',
+      id: `clawhub.ai/${owner}/${slug}`,
+      owner,
+      repo: slug,
+      skill: slug,
+      sourceUrl,
+    };
+  }
+
+  // Download URL: clawhub.ai/api/v1/download?slug=...&version=...
+  const slug = parsed.searchParams.get('slug');
+  if (!slug) {
+    throw new Error(
+      'Invalid ClawHub URL: expected clawhub.ai/{owner}/{slug} or download URL with ?slug='
+    );
+  }
+
+  const version = parsed.searchParams.get('version') || undefined;
+
+  return {
+    host: 'clawhub.ai',
+    id: `clawhub.ai/clawhub/${slug}`,
+    owner: 'clawhub',
+    repo: slug,
+    skill: slug,
+    ref: version,
     sourceUrl,
   };
 }
