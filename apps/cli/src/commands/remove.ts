@@ -42,6 +42,15 @@ export function parseSkillRef(ref: string): ParsedRef | null {
     return { owner, repo, name };
   }
 
+  // owner/name (domain sources where owner contains a dot)
+  if (parts.length === 2) {
+    const [owner, name] = parts;
+    if (!owner || !name) return null;
+    if (DANGEROUS_PATTERNS.test(owner)) return null;
+    if (DANGEROUS_PATTERNS.test(name)) return null;
+    return { owner, name };
+  }
+
   // name only
   if (parts.length === 1) {
     const name = parts[0];
@@ -49,7 +58,6 @@ export function parseSkillRef(ref: string): ParsedRef | null {
     return { name };
   }
 
-  // Invalid format (2 parts or 4+ parts)
   return null;
 }
 
@@ -63,12 +71,16 @@ export type FindResult =
  * O(n) where n = number of installed skills. Fine for typical use (< 100 skills).
  */
 export function findSkillByRef(skills: InstalledSkill[], ref: ParsedRef): FindResult {
-  // Full reference - exact match
-  if (ref.owner && ref.repo) {
+  // Full reference - exact match (3-part with repo, or 2-part domain without repo)
+  if (ref.owner) {
     const skill = skills.find(
-      (s) => s.owner === ref.owner && s.repo === ref.repo && s.name === ref.name
+      (s) =>
+        s.owner === ref.owner &&
+        (ref.repo ? s.repo === ref.repo : s.repo == null) &&
+        s.name === ref.name
     );
-    return skill ? { status: 'found', skill } : { status: 'not_found' };
+    if (skill) return { status: 'found', skill };
+    // If no exact match found with nullable repo logic, fall through to name search
   }
 
   // Name-only - search for matches (case-insensitive)
@@ -148,15 +160,17 @@ export async function remove(
   if (result.status === 'ambiguous') {
     p.log.error(`Multiple skills match "${skillRef}":`);
     for (const m of result.matches) {
-      console.log(`  · ${m.owner}/${m.repo}/${m.name}`);
+      console.log(`  · ${m.repo ? `${m.owner}/${m.repo}/${m.name}` : `${m.owner}/${m.name}`}`);
     }
-    p.log.info('Specify the full reference: owner/repo/name');
+    p.log.info('Specify the full reference: owner/repo/name or owner/name');
     p.outro(pc.red('Removal failed'));
     process.exit(1);
   }
 
   const skill = result.skill;
-  const fullRef = `${skill.owner}/${skill.repo}/${skill.name}`;
+  const fullRef = skill.repo
+    ? `${skill.owner}/${skill.repo}/${skill.name}`
+    : `${skill.owner}/${skill.name}`;
 
   // Validate path safety
   if (!isSafeToDelete(skill.path)) {

@@ -310,8 +310,8 @@ export function getSkillPath(owner: string, repo: string, name: string): string 
   return join(SKILLS_DIR, owner, repo, name);
 }
 
-export function getSkillDir(owner: string, repo: string, name: string): string {
-  return join(SKILLS_DIR, owner, repo, name);
+export function getSkillDir(owner: string, repo: string | null, name: string): string {
+  return repo ? join(SKILLS_DIR, owner, repo, name) : join(SKILLS_DIR, owner, name);
 }
 
 export function addInstalledSkill(skill: InstalledSkill): void {
@@ -329,7 +329,7 @@ export function addInstalledSkill(skill: InstalledSkill): void {
   saveIndex(index);
 }
 
-export function removeInstalledSkill(owner: string, repo: string, name: string): void {
+export function removeInstalledSkill(owner: string, repo: string | null, name: string): void {
   const index = loadIndex();
   index.installedSkills = index.installedSkills.filter(
     (s) => !(s.owner === owner && s.repo === repo && s.name === name)
@@ -339,7 +339,7 @@ export function removeInstalledSkill(owner: string, repo: string, name: string):
 
 export function getInstalledSkill(
   owner: string,
-  repo: string,
+  repo: string | null,
   name: string
 ): InstalledSkill | undefined {
   const index = loadIndex();

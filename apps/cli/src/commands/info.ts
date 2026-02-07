@@ -6,14 +6,18 @@ import type { RiskLevel, AnalysisResult, SecurityFlag } from '@vett/core';
 
 function parseSkillRef(ref: string): {
   owner: string;
-  repo: string;
+  repo: string | null;
   name: string;
 } {
   const parts = ref.split('/');
-  if (parts.length !== 3) {
-    throw new Error('Invalid skill reference. Format: owner/repo/skill');
+  if (parts.length === 3) {
+    return { owner: parts[0], repo: parts[1], name: parts[2] };
   }
-  return { owner: parts[0], repo: parts[1], name: parts[2] };
+  if (parts.length === 2) {
+    // Domain sources: owner/skill (owner contains a dot)
+    return { owner: parts[0], repo: null, name: parts[1] };
+  }
+  throw new Error('Invalid skill reference. Format: owner/repo/skill or owner/skill');
 }
 
 function formatRisk(risk: RiskLevel): string {
@@ -53,9 +57,10 @@ export async function info(skillRef: string): Promise<void> {
   s.start('Fetching skill info');
 
   const skill = await getSkillByRef(owner, repo, name);
+  const displayRef = repo ? `${owner}/${repo}/${name}` : `${owner}/${name}`;
   if (!skill) {
     s.stop('Not found');
-    p.log.error(`Skill not found: ${owner}/${repo}/${name}`);
+    p.log.error(`Skill not found: ${displayRef}`);
     p.outro(pc.red('Failed'));
     process.exit(1);
   }
@@ -63,7 +68,7 @@ export async function info(skillRef: string): Promise<void> {
   s.stop('Found');
 
   // Check if installed locally
-  const installed = getInstalledSkill(owner, repo, name);
+  const installed = repo ? getInstalledSkill(owner, repo, name) : null;
 
   // Build info display
   const lines: string[] = [];
@@ -140,7 +145,7 @@ export async function info(skillRef: string): Promise<void> {
     }
   }
 
-  p.note(lines.join('\n'), `${owner}/${repo}/${name}`);
+  p.note(lines.join('\n'), displayRef);
 
   p.outro(pc.dim('Done'));
 }

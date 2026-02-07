@@ -1,22 +1,32 @@
 /**
  * URL parser for skill sources
  *
- * Normalizes any skill source URL to a canonical Vett ID.
- * Supports GitHub and arbitrary HTTP sources.
+ * Normalizes any skill source URL to a canonical Vett identity.
+ * Supports GitHub, ClawHub, and domain-hosted skills (.well-known, skill.md).
+ *
+ * Identity model:
+ *   GitHub:       owner = org,    repo = repository,   skill = name
+ *   Registries:   owner = domain, repo = publisher,    skill = slug
+ *   Domain-hosted: owner = domain, repo = path|null,   skill = name
+ *
+ * Namespace rule: owner containing a dot is a domain source.
+ * GitHub usernames cannot contain dots, so this is unambiguous.
  */
 
+import psl from 'psl';
+
 export interface ParsedSkillUrl {
-  /** Host domain (github.com, examplehost.com) */
+  /** Host domain (github.com, clawhub.ai, mintlify.com) */
   host: string;
-  /** Full normalized ID (github.com/owner/repo/skill) */
+  /** Full normalized ID (host/owner/repo/skill or host/owner/skill) */
   id: string;
-  /** Repository owner (for git hosts) */
-  owner?: string;
-  /** Repository name (for git hosts) */
+  /** Skill owner — GitHub org or registrable domain */
+  owner: string;
+  /** Repository or publisher grouping (undefined for root domain skills) */
   repo?: string;
-  /** Normalized skill name (for display/ID) */
+  /** Normalized skill name (path-derived; ingest may override with frontmatter) */
   skill?: string;
-  /** Full path within repo (for fetching) */
+  /** Full path within repo (for fetching from GitHub) */
   path?: string;
   /** Branch or tag ref */
   ref?: string;
@@ -31,11 +41,15 @@ export type SkillHost = 'github.com' | 'other';
  *
  * @example
  * parseSkillUrl('https://github.com/vercel-labs/agent-skills/tree/main/skills/react')
- * // => { host: 'github.com', id: 'github.com/vercel-labs/agent-skills/react', ... }
+ * // => { owner: 'vercel-labs', repo: 'agent-skills', skill: 'react', ... }
  *
  * @example
- * parseSkillUrl('git@github.com:anthropics/skills.git')
- * // => { host: 'github.com', id: 'github.com/anthropics/skills', ... }
+ * parseSkillUrl('https://clawhub.ai/Callmedas69/credential-manager')
+ * // => { owner: 'clawhub.ai', repo: 'callmedas69', skill: 'credential-manager', ... }
+ *
+ * @example
+ * parseSkillUrl('https://docs.cdp.coinbase.com/.well-known/skills/default/skill.md')
+ * // => { owner: 'coinbase.com', skill: 'default', ... }
  */
 export function parseSkillUrl(url: string): ParsedSkillUrl {
   const sourceUrl = url;
@@ -96,7 +110,7 @@ function inferProtocol(url: string): string {
     return `https://${url}`;
   }
 
-  // Shorthand: owner/repo/skill -> try GitHub
+  // Shorthand: owner/repo/skill -> try GitHub (no dots in first segment)
   if (url.match(/^[\w-]+\/[\w-]+/)) {
     return `https://github.com/${url}`;
   }
@@ -110,6 +124,25 @@ function inferProtocol(url: string): string {
  */
 function normalizeHost(host: string): string {
   return host.toLowerCase().replace(/^www\./, '');
+}
+
+/**
+ * Extract the registrable domain from a hostname using the Public Suffix List.
+ *
+ * Examples:
+ *   docs.cdp.coinbase.com  -> coinbase.com
+ *   docs.x.com             -> x.com
+ *   mintlify.com           -> mintlify.com
+ *   anthropics.github.io   -> anthropics.github.io  (github.io is a public suffix)
+ *   my-app.vercel.app      -> my-app.vercel.app     (vercel.app is a public suffix)
+ */
+export function getRegistrableDomain(host: string): string {
+  const parsed = psl.parse(host);
+  if ('domain' in parsed && parsed.domain) {
+    return parsed.domain;
+  }
+  // Fallback to the full host if PSL can't parse it
+  return host;
 }
 
 /**
@@ -176,63 +209,63 @@ function parseGitHostUrl(
 /**
  * Parse ClawHub registry URLs
  *
- * Formats:
- * - clawhub.ai/{owner}/{slug}              (site URL — preferred)
- * - clawhub.ai/api/v1/download?slug=...    (download URL — legacy)
+ * Identity: owner = 'clawhub.ai', repo = publisher handle, skill = slug
  *
- * Site URLs contain the owner handle in the path. Download URLs only have
- * the slug as a query param and no owner info.
+ * Formats:
+ * - clawhub.ai/{publisher}/{slug}       (site URL — preferred)
+ * - clawhub.ai/api/v1/download?slug=... (download URL — legacy)
  */
 function parseClawHubUrl(parsed: URL, sourceUrl: string): ParsedSkillUrl {
   const pathParts = parsed.pathname.split('/').filter(Boolean);
 
-  // Site URL: clawhub.ai/{owner}/{slug}
+  // Site URL: clawhub.ai/{publisher}/{slug}
   if (pathParts.length === 2 && pathParts[0] !== 'api') {
-    const [owner, slug] = pathParts;
+    const publisher = pathParts[0].toLowerCase();
+    const slug = pathParts[1].toLowerCase();
     return {
       host: 'clawhub.ai',
-      id: `clawhub.ai/${owner}/${slug}`,
-      owner,
-      repo: slug,
+      id: `clawhub.ai/${publisher}/${slug}`,
+      owner: 'clawhub.ai',
+      repo: publisher,
       skill: slug,
       sourceUrl,
     };
   }
 
-  // Download URL: clawhub.ai/api/v1/download?slug=...&version=...
-  const slug = parsed.searchParams.get('slug');
+  // Download URL: clawhub.ai/api/v1/download?slug=...&tag=...
+  const slug = parsed.searchParams.get('slug')?.toLowerCase();
   if (!slug) {
     throw new Error(
-      'Invalid ClawHub URL: expected clawhub.ai/{owner}/{slug} or download URL with ?slug='
+      'Invalid ClawHub URL: expected clawhub.ai/{publisher}/{slug} or download URL with ?slug='
     );
   }
 
-  const version = parsed.searchParams.get('version') || undefined;
+  const tag = parsed.searchParams.get('tag') || undefined;
 
   return {
     host: 'clawhub.ai',
     id: `clawhub.ai/clawhub/${slug}`,
-    owner: 'clawhub',
-    repo: slug,
+    owner: 'clawhub.ai',
+    repo: 'clawhub',
     skill: slug,
-    ref: version,
+    ref: tag,
     sourceUrl,
   };
 }
 
 /**
- * Parse arbitrary HTTP URLs
+ * Parse domain-hosted skill URLs
  *
- * Extracts repo (parent directory) and skill (filename) separately to avoid
- * duplication in the database identity tuple.
+ * Identity: owner = registrable domain, repo = path group (or undefined), skill = name
  *
  * Formats:
- * - example.com/SKILL.md -> repo=example, skill=example
- * - example.com/docs/skill.md -> repo=example, skill=docs
- * - example.com/path/to/docs/skill.md -> repo=path/to, skill=docs
- * - example.com/docs/frontend.md -> repo=docs, skill=frontend
+ * - example.com/skill.md                              -> owner=example.com, skill=example
+ * - example.com/docs/skill.md                         -> owner=example.com, repo=docs, skill=docs
+ * - example.com/.well-known/skills/default/skill.md   -> owner=example.com, skill=default
+ * - example.com/docs/frontend.md                      -> owner=example.com, repo=docs, skill=frontend
  */
 function parseHttpUrl(host: string, pathParts: string[], sourceUrl: string): ParsedSkillUrl {
+  const owner = getRegistrableDomain(host);
   const normalized = pathParts.map((p) => p.toLowerCase());
 
   // Strip .md extension from last part
@@ -241,50 +274,70 @@ function parseHttpUrl(host: string, pathParts: string[], sourceUrl: string): Par
     normalized[normalized.length - 1] = last.replace(/\.md$/, '');
   }
 
-  const hostBase = host.split('.')[0]; // expample.com -> moltbook
+  // Check for .well-known/skills convention — strip protocol prefix
+  const wellKnownIdx = normalized.indexOf('.well-known');
+  if (wellKnownIdx !== -1 && normalized[wellKnownIdx + 1] === 'skills') {
+    // .well-known/skills/{dir}/skill.md -> just {dir}/skill.md
+    const afterWellKnown = normalized.slice(wellKnownIdx + 2);
+    return parseHttpPath(owner, host, afterWellKnown, sourceUrl);
+  }
 
-  let repo: string;
+  return parseHttpPath(owner, host, normalized, sourceUrl);
+}
+
+/**
+ * Parse the path portion of an HTTP-hosted skill URL into identity fields.
+ */
+function parseHttpPath(
+  owner: string,
+  host: string,
+  normalized: string[],
+  sourceUrl: string
+): ParsedSkillUrl {
+  const hostBase = owner.split('.')[0];
+
+  let repo: string | undefined;
   let skill: string;
 
   if (normalized.length === 0) {
     // Bare domain (example.com/)
-    repo = hostBase;
     skill = hostBase;
   } else if (normalized.length === 1) {
-    // Single component (example.com/foo.md or example.com/skill.md)
-    repo = hostBase;
-    // If filename is literally "skill", use host base as skill name
+    // Single component (example.com/skill.md or example.com/frontend.md)
     skill = normalized[0] === 'skill' ? hostBase : normalized[0];
   } else {
-    // Multiple components (example.com/path/to/foo.md)
+    // Multiple components
     const filename = normalized[normalized.length - 1];
     const parentPath = normalized.slice(0, -1);
 
     if (filename === 'skill') {
-      // skill.md convention: the directory containing skill.md IS the skill
-      // e.g., docs/skill.md -> the skill is "docs"
+      // skill.md convention: directory containing skill.md IS the skill
       if (parentPath.length === 1) {
-        // e.g., docs/skill.md -> repo=hostBase, skill=docs
-        repo = hostBase;
+        // docs/skill.md -> repo=docs, skill=docs
+        repo = parentPath[0];
         skill = parentPath[0];
       } else {
-        // e.g., path/to/docs/skill.md -> repo=path/to, skill=docs
+        // path/to/docs/skill.md -> repo=path/to, skill=docs
         repo = parentPath.slice(0, -1).join('/');
         skill = parentPath[parentPath.length - 1];
       }
     } else {
-      // Regular file: skill name is the filename
-      // e.g., docs/frontend.md -> repo=docs, skill=frontend
+      // Named file: docs/frontend.md -> repo=docs, skill=frontend
       repo = parentPath.join('/');
       skill = filename;
     }
   }
 
-  const id = `${host}/${repo}/${skill}`;
+  // Build ID — include repo only if present
+  const idParts = [host, owner];
+  if (repo) idParts.push(repo);
+  idParts.push(skill);
+  const id = idParts.join('/');
 
   return {
     host,
     id,
+    owner,
     repo,
     skill,
     sourceUrl,

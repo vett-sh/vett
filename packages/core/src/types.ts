@@ -39,7 +39,7 @@ export interface AnalysisResult {
 export interface Skill {
   id: string;
   owner: string;
-  repo: string;
+  repo: string | null;
   name: string;
   description: string | null;
   sourceUrl: string | null;
@@ -79,7 +79,7 @@ export interface SkillDetail extends Skill {
 // CLI types
 export interface InstalledSkill {
   owner: string;
-  repo: string;
+  repo: string | null;
   name: string;
   version: string;
   installedAt: Date;

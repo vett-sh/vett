@@ -31,7 +31,8 @@ export async function list(): Promise<void> {
     lines.push(`${pc.dim('Installed:')} ${date}`);
     lines.push(`${pc.dim('Path:')} ${pc.dim(skill.path)}`);
 
-    const header = `${pc.bold(skill.name)} ${pc.dim(`${skill.owner}/${skill.repo}@${skill.version}`)}`;
+    const ownerRef = skill.repo ? `${skill.owner}/${skill.repo}` : skill.owner;
+    const header = `${pc.bold(skill.name)} ${pc.dim(`${ownerRef}@${skill.version}`)}`;
     p.note(lines.join('\n'), header);
   }
 

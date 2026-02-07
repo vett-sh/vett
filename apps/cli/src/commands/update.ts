@@ -59,11 +59,11 @@ export async function update(skillRef?: string): Promise<void> {
 
 async function updateSkill(
   owner: string,
-  repo: string,
+  repo: string | null,
   name: string,
   currentVersion: string
 ): Promise<boolean> {
-  const ref = `${owner}/${repo}/${name}`;
+  const ref = repo ? `${owner}/${repo}/${name}` : `${owner}/${name}`;
 
   try {
     const skill = await getSkillByRef(owner, repo, name);

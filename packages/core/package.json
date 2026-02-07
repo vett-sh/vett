@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
+    "psl": "^1.15.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

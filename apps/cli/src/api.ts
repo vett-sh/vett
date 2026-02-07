@@ -149,10 +149,11 @@ export async function searchSkills(query?: string): Promise<SkillWithLatestVersi
 
 export async function getSkillByRef(
   owner: string,
-  repo: string,
+  repo: string | null,
   name: string
 ): Promise<SkillDetail | null> {
-  const params = new URLSearchParams({ owner, repo, name });
+  const params = new URLSearchParams({ owner, name });
+  if (repo) params.set('repo', repo);
   return fetchJsonOrNull<SkillDetail>(`/api/v1/skills?${params}`);
 }
 

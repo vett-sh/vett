@@ -60,7 +60,7 @@ interface VersionInfo {
 
 interface SkillInfo {
   owner: string;
-  repo: string;
+  repo: string | null;
   name: string;
   description: string | null;
 }
@@ -141,7 +141,7 @@ function formatSkillInfo(result: ResolvedResult): string {
 
   lines.push(`${pc.bold(skill.name)}`);
   lines.push(
-    `${verdictIcon} ${verdictLabel} ${pc.dim('·')} ${pc.dim(`${skill.owner}/${skill.repo}`)}`
+    `${verdictIcon} ${verdictLabel} ${pc.dim('·')} ${pc.dim(skill.repo ? `${skill.owner}/${skill.repo}` : skill.owner)}`
   );
 
   // Show summary or description
@@ -444,7 +444,9 @@ export async function add(
   const verdict = getVerdict(resolved.version.risk as RiskLevel);
 
   // Display skill info
-  const skillRef = `${resolved.skill.owner}/${resolved.skill.repo}/${resolved.skill.name}`;
+  const skillRef = resolved.skill.repo
+    ? `${resolved.skill.owner}/${resolved.skill.repo}/${resolved.skill.name}`
+    : `${resolved.skill.owner}/${resolved.skill.name}`;
   p.note(formatSkillInfo(resolved), skillRef);
 
   // Block critical-risk skills
@@ -630,9 +632,7 @@ export async function add(
   });
 
   // Summary
-  p.log.success(
-    `${resolved.skill.owner}/${resolved.skill.repo}/${resolved.skill.name}@${resolved.version.version}`
-  );
+  p.log.success(`${skillRef}@${resolved.version.version}`);
   p.log.info(`${pc.dim('Canonical:')} ${skillDir}`);
 
   if (installedAgentNames.length > 0) {

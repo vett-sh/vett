@@ -76,7 +76,12 @@ export async function search(query: string): Promise<void> {
   const labelWidth = (process.stdout.columns || 80) - 6;
 
   const options = skills.map((skill) => {
-    const ref = `${skill.owner}/${skill.repo}/${pc.bold(skill.name)}`;
+    const skillRef = skill.repo
+      ? `${skill.owner}/${skill.repo}/${pc.bold(skill.name)}`
+      : `${skill.owner}/${pc.bold(skill.name)}`;
+    const skillValue = skill.repo
+      ? `${skill.owner}/${skill.repo}/${skill.name}`
+      : `${skill.owner}/${skill.name}`;
     const risk = formatRisk(skill.latestVersion?.risk as RiskLevel | null);
     const installs = formatInstalls(skill.installCount);
     const meta = pc.dim(`${installs} ·`) + ` ${risk}`;
@@ -85,8 +90,8 @@ export async function search(query: string): Promise<void> {
       : '';
 
     return {
-      value: `${skill.owner}/${skill.repo}/${skill.name}`,
-      label: `${ref}  ${meta}${desc}`,
+      value: skillValue,
+      label: `${skillRef}  ${meta}${desc}`,
     };
   });
 
@@ -103,7 +108,9 @@ export async function search(query: string): Promise<void> {
       return;
     }
 
-    const skill = skills.find((s) => `${s.owner}/${s.repo}/${s.name}` === selected)!;
+    const skill = skills.find(
+      (s) => (s.repo ? `${s.owner}/${s.repo}/${s.name}` : `${s.owner}/${s.name}`) === selected
+    )!;
     p.note(formatSkillNote(skill), selected);
 
     const confirm = await p.confirm({

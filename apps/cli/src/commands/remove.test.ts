@@ -11,6 +11,17 @@ describe('parseSkillRef', () => {
     });
   });
 
+  it('parses owner/name reference (domain source, no repo)', () => {
+    expect(parseSkillRef('coinbase.com/default')).toEqual({
+      owner: 'coinbase.com',
+      name: 'default',
+    });
+    expect(parseSkillRef('owner/skill')).toEqual({
+      owner: 'owner',
+      name: 'skill',
+    });
+  });
+
   it('parses name-only reference', () => {
     expect(parseSkillRef('my-skill')).toEqual({
       owner: undefined,
@@ -20,7 +31,6 @@ describe('parseSkillRef', () => {
   });
 
   it('rejects invalid references', () => {
-    expect(parseSkillRef('owner/repo')).toBeNull(); // missing name
     expect(parseSkillRef('a/b/c/d')).toBeNull(); // too many parts
     expect(parseSkillRef('')).toBeNull();
     expect(parseSkillRef('   ')).toBeNull();
@@ -70,6 +80,22 @@ describe('findSkillByRef', () => {
       installedAt: new Date(),
       path: '/home/user/.vett/skills/other/stuff/commit',
     },
+    {
+      owner: 'coinbase.com',
+      repo: null,
+      name: 'default',
+      version: '1.0',
+      installedAt: new Date(),
+      path: '/home/user/.vett/skills/coinbase.com/default',
+    },
+    {
+      owner: 'x.com',
+      repo: null,
+      name: 'x',
+      version: '1.0',
+      installedAt: new Date(),
+      path: '/home/user/.vett/skills/x.com/x',
+    },
   ];
 
   it('finds by full reference', () => {
@@ -78,6 +104,30 @@ describe('findSkillByRef', () => {
     if (result.status === 'found') {
       expect(result.skill.owner).toBe('acme');
       expect(result.skill.name).toBe('commit');
+    }
+  });
+
+  it('finds domain skill by owner/name (no repo)', () => {
+    const result = findSkillByRef(skills, { owner: 'coinbase.com', name: 'default' });
+    expect(result.status).toBe('found');
+    if (result.status === 'found') {
+      expect(result.skill.owner).toBe('coinbase.com');
+      expect(result.skill.repo).toBeNull();
+      expect(result.skill.name).toBe('default');
+    }
+  });
+
+  it('does not match domain skill when repo is specified', () => {
+    const result = findSkillByRef(skills, {
+      owner: 'coinbase.com',
+      repo: 'something',
+      name: 'default',
+    });
+    // Should fall through to name search since exact match fails
+    expect(result.status).toBe('found');
+    if (result.status === 'found') {
+      // Falls through to name-only search, finds by name 'default'
+      expect(result.skill.name).toBe('default');
     }
   });
 
