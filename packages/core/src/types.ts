@@ -18,6 +18,7 @@ export interface SecurityFlag {
   type: IssueType;
   evidence: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
+  confidence?: 'confirmed' | 'inferred' | 'speculative';
 }
 
 // Permissions detected in a skill
