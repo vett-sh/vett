@@ -419,7 +419,7 @@ export async function add(
     // Handle failure
     if (job.status === 'failed') {
       s.stop('Analysis failed');
-      p.log.error(job.message || job.error || 'Unknown error');
+      p.log.error(job.hint || job.message || job.error || 'Unknown error');
       p.outro(pc.red('Installation failed'));
       process.exit(1);
     }

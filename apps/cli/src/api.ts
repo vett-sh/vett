@@ -51,6 +51,7 @@ export interface JobResponse {
   status: 'pending' | 'processing' | 'complete' | 'failed';
   stage?: string;
   message?: string;
+  hint?: string;
   error?: string;
   createdAt: string;
   startedAt?: string;
