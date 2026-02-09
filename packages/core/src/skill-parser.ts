@@ -1,4 +1,4 @@
-import yaml from 'js-yaml';
+import matter from 'gray-matter';
 
 /**
  * Metadata extracted from SKILL.md frontmatter
@@ -57,17 +57,6 @@ export function extractFrontmatter(markdown: string): {
   return { frontmatter, content };
 }
 
-/**
- * Parse YAML frontmatter string into an object
- */
-export function parseFrontmatter(frontmatter: string): Record<string, unknown> {
-  try {
-    const parsed = yaml.load(frontmatter);
-    return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
 
 /**
  * Extract version from frontmatter (lenient parsing)
@@ -136,22 +125,42 @@ export function extractMetadata(frontmatter: Record<string, unknown>): SkillMeta
   return metadata;
 }
 
+const VALID_SKILL_NAME = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
+
+/**
+ * Check if a name conforms to the Agent Skills spec:
+ * max 64 chars, lowercase letters, numbers, hyphens, no leading/trailing hyphen.
+ */
+export function isValidSkillName(name: string): boolean {
+  return name.length <= 64 && VALID_SKILL_NAME.test(name);
+}
+
+/**
+ * Convert an arbitrary name to a spec-compliant slug.
+ * "WhatsApp Automation & A2A" → "whatsapp-automation-a2a"
+ */
+export function slugifySkillName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-') // non-alphanumeric → hyphen
+    .replace(/^-+|-+$/g, '')     // trim leading/trailing hyphens
+    .slice(0, 64)
+    .replace(/-+$/, '');          // trim again if slice cut mid-hyphen
+}
+
 /**
  * Parse a SKILL.md file, extracting frontmatter and metadata
  */
 export function parseSkillFile(markdown: string): ParsedSkillFile {
-  const { frontmatter: frontmatterStr, content } = extractFrontmatter(markdown);
-
-  if (!frontmatterStr) {
-    return {
-      frontmatter: {},
-      metadata: {},
-      content: markdown,
-    };
+  try {
+    const result = matter(markdown);
+    const frontmatter =
+      typeof result.data === 'object' && result.data !== null
+        ? (result.data as Record<string, unknown>)
+        : {};
+    const metadata = extractMetadata(frontmatter);
+    return { frontmatter, metadata, content: result.content };
+  } catch {
+    return { frontmatter: {}, metadata: {}, content: markdown };
   }
-
-  const frontmatter = parseFrontmatter(frontmatterStr);
-  const metadata = extractMetadata(frontmatter);
-
-  return { frontmatter, metadata, content };
 }
