@@ -17,5 +17,8 @@ jobs:
       - name: Release Please
         uses: googleapis/release-please-action@v4
         with:
+          # Use a PAT so the tag/release creation can trigger other workflows (like `.github/workflows/release.yml`).
+          # This must be configured in the repo settings as `RELEASE_PLEASE_TOKEN`.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json

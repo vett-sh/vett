@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v0.1.1)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,8 +21,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Resolve tag ref
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+
+          # Basic sanity check: only allow publishing tags that look like releases.
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "Invalid tag: $TAG" >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+
+          VERSION="${TAG#v}"
+          if [[ "$VERSION" == *"-beta"* ]]; then
+            echo "npm_tag=beta" >> "$GITHUB_OUTPUT"
+          elif [[ "$VERSION" == *"-rc"* ]]; then
+            echo "npm_tag=rc" >> "$GITHUB_OUTPUT"
+          elif [[ "$VERSION" == *"-alpha"* ]]; then
+            echo "npm_tag=alpha" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -26,7 +66,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
@@ -36,28 +76,14 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Determine npm tag
-        id: npm-tag
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          if [[ "$VERSION" == *"-beta"* ]]; then
-            echo "tag=beta" >> $GITHUB_OUTPUT
-          elif [[ "$VERSION" == *"-rc"* ]]; then
-            echo "tag=rc" >> $GITHUB_OUTPUT
-          elif [[ "$VERSION" == *"-alpha"* ]]; then
-            echo "tag=alpha" >> $GITHUB_OUTPUT
-          else
-            echo "tag=latest" >> $GITHUB_OUTPUT
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Publish to npm
-        run: pnpm --filter vett publish --access public --tag ${{ steps.npm-tag.outputs.tag }} --no-git-checks
+        working-directory: apps/cli
+        run: npm publish --access public --tag ${{ steps.tag.outputs.npm_tag }} --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
+          NODE_AUTH_TOKEN: ''
 
       - name: Smoke test
         run: .github/scripts/smoke-test.sh "$TAG_REF"
         env:
-          TAG_REF: ${{ github.ref_name }}
+          TAG_REF: ${{ steps.tag.outputs.tag }}
