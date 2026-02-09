@@ -1,0 +1,20 @@
+# Don't format these folders
+node_modules
+**/.next
+**/build
+**/dist
+**/.turbo
+**/*.md
+**/*.json
+**/*.d.ts
+
+# Don't format these files
+**/pnpm-lock.yaml
+**/pnpm-workspace.yaml
+.env
+.env.local
+
+# Don't format images and icons
+**/public/**/*.svg
+**/public/**/*.png
+**/public/**/*.jpg

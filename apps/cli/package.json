@@ -19,12 +19,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vett-sh/vett-monorepo.git",
+    "url": "git+https://github.com/vett-sh/vett.git",
     "directory": "apps/cli"
   },
   "homepage": "https://vett.sh",
   "bugs": {
-    "url": "https://github.com/vett-sh/vett-monorepo/issues"
+    "url": "https://github.com/vett-sh/vett/issues"
   },
   "scripts": {
     "build": "tsdown",

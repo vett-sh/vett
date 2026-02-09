@@ -1,0 +1,21 @@
+{
+  "name": "vett",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "typecheck:ci": "pnpm --filter @vett/core build && pnpm -r typecheck",
+    "format": "prettier --ignore-path ./.prettierignore . --ignore-unknown --write",
+    "format:check": "prettier --ignore-path ./.prettierignore . --ignore-unknown --check"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.0",
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.4"
+  }
+}
