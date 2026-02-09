@@ -67,9 +67,7 @@ describe('parseSkillVersion', () => {
   });
 
   it('prefers metadata.version over root version', () => {
-    expect(
-      parseSkillVersion({ version: '1.0.0', metadata: { version: '2.0.0' } })
-    ).toBe('2.0.0');
+    expect(parseSkillVersion({ version: '1.0.0', metadata: { version: '2.0.0' } })).toBe('2.0.0');
   });
 
   it('coerces numeric version to string', () => {

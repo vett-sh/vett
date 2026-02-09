@@ -57,7 +57,6 @@ export function extractFrontmatter(markdown: string): {
   return { frontmatter, content };
 }
 
-
 /**
  * Extract version from frontmatter (lenient parsing)
  *
@@ -143,9 +142,9 @@ export function slugifySkillName(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-') // non-alphanumeric → hyphen
-    .replace(/^-+|-+$/g, '')     // trim leading/trailing hyphens
+    .replace(/^-+|-+$/g, '') // trim leading/trailing hyphens
     .slice(0, 64)
-    .replace(/-+$/, '');          // trim again if slice cut mid-hyphen
+    .replace(/-+$/, ''); // trim again if slice cut mid-hyphen
 }
 
 /**
