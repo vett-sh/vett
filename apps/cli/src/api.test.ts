@@ -4,7 +4,8 @@ vi.mock('./config', () => ({
   loadConfig: () => ({ registryUrl: 'http://test.local' }),
 }));
 
-import { waitForJob } from './api';
+import { getJobStatus, waitForJob } from './api';
+import { UpgradeRequiredError } from './errors';
 
 function mockFetchWith(response: Record<string, unknown>) {
   global.fetch = vi.fn().mockResolvedValue({
@@ -57,5 +58,27 @@ describe('waitForJob', () => {
     await vi.advanceTimersByTimeAsync(6_000);
 
     await expect(promise).rejects.toThrow(/job-abc-123.*still processing server-side/s);
+  });
+});
+
+describe('upgrade required (426)', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('throws UpgradeRequiredError with min version from response', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 426,
+      headers: {
+        get: (k: string) => (k.toLowerCase() === 'x-vett-min-cli-version' ? '0.2.1' : null),
+      },
+      json: () => Promise.resolve({ error: 'Upgrade required', minVersion: '0.2.1' }),
+    });
+
+    await expect(getJobStatus('job-1')).rejects.toBeInstanceOf(UpgradeRequiredError);
+    await expect(getJobStatus('job-1')).rejects.toMatchObject({ minVersion: '0.2.1' });
   });
 });

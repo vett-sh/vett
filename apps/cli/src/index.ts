@@ -7,8 +7,13 @@ import { update } from './commands/update';
 import { remove } from './commands/remove';
 import { sync } from './commands/sync';
 import { listAgents } from './commands/agents';
+import { upgrade } from './commands/upgrade';
 import { trackCommand, trackError } from './telemetry';
 import { capTerminalWidth } from './terminal';
+import { runUpdateNotifier } from './update-notifier';
+import { UpgradeRequiredError } from './errors';
+import * as p from '@clack/prompts';
+import pc from 'picocolors';
 
 declare const __VERSION__: string;
 
@@ -24,20 +29,32 @@ function collect(value: string, previous: string[]): string[] {
   return previous.concat([value]);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function withTelemetry(commandName: string, fn: (...args: any[]) => Promise<void>) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return async (...args: any[]): Promise<void> => {
+function withTelemetry<TArgs extends unknown[]>(commandName: string, fn: (...args: TArgs) => Promise<void>) {
+  return async (...args: TArgs): Promise<void> => {
     const start = performance.now();
     let success = true;
+    let shouldRunNotifier = true;
     try {
       await fn(...args);
     } catch (err) {
       success = false;
       trackError({ command: commandName, error: err });
+      if (err instanceof UpgradeRequiredError) {
+        shouldRunNotifier = false;
+        const min = err.minVersion ?? 'unknown';
+        p.log.error(
+          `${pc.red('Upgrade required.')} Minimum supported CLI version: ${pc.cyan(min)}`
+        );
+        p.log.info(`For details: ${pc.cyan('vett upgrade')}`);
+        process.exitCode = 1;
+        return;
+      }
       throw err;
     } finally {
       trackCommand({ command: commandName, duration_ms: performance.now() - start, success });
+      if (shouldRunNotifier) {
+        runUpdateNotifier({ command: commandName });
+      }
       // Yield to let the fire-and-forget fetch initiate before Node exits
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
@@ -90,5 +107,10 @@ program
   .command('agents')
   .description('List detected AI coding agents')
   .action(withTelemetry('agents', listAgents));
+
+program
+  .command('upgrade')
+  .description('Show how to upgrade vett')
+  .action(withTelemetry('upgrade', upgrade));
 
 program.parse();

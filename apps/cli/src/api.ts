@@ -2,6 +2,7 @@ import { loadConfig } from './config';
 import { skillManifestSchema } from '@vett/core';
 import { computeManifestHash as computeManifestHashCore } from '@vett/core/manifest-hash';
 import { createHash } from 'node:crypto';
+import { UpgradeRequiredError } from './errors';
 import type {
   Skill,
   SkillWithLatestVersion,
@@ -81,6 +82,22 @@ async function fetchJson<T>(path: string, options: RequestInit = {}): Promise<T>
     },
   });
 
+  if (response.status === 426) {
+    const minVersion = response.headers.get('X-Vett-Min-Cli-Version');
+    const errorBody = (await response.json().catch(() => null)) as null | {
+      error?: string;
+      minVersion?: string;
+      currentVersion?: string | null;
+    };
+    const min = (errorBody?.minVersion && typeof errorBody.minVersion === 'string'
+      ? errorBody.minVersion
+      : minVersion) ?? null;
+    const current =
+      typeof errorBody?.currentVersion === 'string' ? errorBody.currentVersion : CLI_VERSION;
+    const msg = `CLI is too old for this registry. Minimum supported: ${min ?? 'unknown'}.`;
+    throw new UpgradeRequiredError(msg, min, current);
+  }
+
   if (response.status === 429) {
     const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
     const limit = parseInt(response.headers.get('X-RateLimit-Limit') || '0', 10);
@@ -111,6 +128,22 @@ async function fetchJsonOrNull<T>(path: string, options: RequestInit = {}): Prom
       ...options.headers,
     },
   });
+
+  if (response.status === 426) {
+    const minVersion = response.headers.get('X-Vett-Min-Cli-Version');
+    const errorBody = (await response.json().catch(() => null)) as null | {
+      error?: string;
+      minVersion?: string;
+      currentVersion?: string | null;
+    };
+    const min = (errorBody?.minVersion && typeof errorBody.minVersion === 'string'
+      ? errorBody.minVersion
+      : minVersion) ?? null;
+    const current =
+      typeof errorBody?.currentVersion === 'string' ? errorBody.currentVersion : CLI_VERSION;
+    const msg = `CLI is too old for this registry. Minimum supported: ${min ?? 'unknown'}.`;
+    throw new UpgradeRequiredError(msg, min, current);
+  }
 
   if (response.status === 404) {
     return null;
@@ -177,6 +210,15 @@ export async function downloadSkill(
     redirect: 'follow',
     headers: getHeaders(),
   });
+
+  if (response.status === 426) {
+    const minVersion = response.headers.get('X-Vett-Min-Cli-Version');
+    throw new UpgradeRequiredError(
+      `CLI is too old for this registry. Minimum supported: ${minVersion ?? 'unknown'}.`,
+      minVersion,
+      CLI_VERSION
+    );
+  }
 
   if (response.status === 429) {
     const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);

@@ -2,6 +2,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { loadIndex, getInstalledSkill } from '../config';
 import { getSkillByRef } from '../api';
+import { UpgradeRequiredError } from '../errors';
 import { add } from './add';
 
 export async function update(skillRef?: string): Promise<void> {
@@ -87,6 +88,7 @@ async function updateSkill(
     await add(ref, { force: true, yes: true });
     return true;
   } catch (error) {
+    if (error instanceof UpgradeRequiredError) throw error;
     p.log.error(`${ref}: failed to update - ${(error as Error).message}`);
     return false;
   }

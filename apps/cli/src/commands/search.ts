@@ -2,6 +2,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import type { RiskLevel, SkillWithLatestVersion } from '@vett/core';
 import { searchSkills } from '../api';
+import { UpgradeRequiredError } from '../errors';
 import { add } from './add';
 
 function truncate(text: string, max: number): string {
@@ -57,6 +58,10 @@ export async function search(query: string): Promise<void> {
     skills = await searchSkills(query);
   } catch (error) {
     s.stop('Search failed');
+    if (error instanceof UpgradeRequiredError) {
+      p.outro(pc.red('Search failed'));
+      throw error;
+    }
     p.log.error((error as Error).message);
     p.outro(pc.red('Search failed'));
     process.exit(1);

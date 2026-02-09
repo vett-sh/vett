@@ -2,6 +2,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { getSkillByRef } from '../api';
 import { getInstalledSkill } from '../config';
+import { UpgradeRequiredError } from '../errors';
 import type { RiskLevel, AnalysisResult, SecurityFlag } from '@vett/core';
 
 function parseSkillRef(ref: string): {
@@ -56,7 +57,19 @@ export async function info(skillRef: string): Promise<void> {
   const s = p.spinner();
   s.start('Fetching skill info');
 
-  const skill = await getSkillByRef(owner, repo, name);
+  let skill;
+  try {
+    skill = await getSkillByRef(owner, repo, name);
+  } catch (error) {
+    s.stop('Failed');
+    if (error instanceof UpgradeRequiredError) {
+      p.outro(pc.red('Failed'));
+      throw error;
+    }
+    p.log.error((error as Error).message);
+    p.outro(pc.red('Failed'));
+    process.exit(1);
+  }
   const displayRef = repo ? `${owner}/${repo}/${name}` : `${owner}/${name}`;
   if (!skill) {
     s.stop('Not found');

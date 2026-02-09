@@ -24,6 +24,7 @@ import type {
 import { detectInstalledAgents, parseAgentTypes, agents, type AgentType } from '../agents';
 import { installToAgents } from '../installer';
 import { assertNoSymlinkPathComponents } from '../lib/fs-safety';
+import { UpgradeRequiredError } from '../errors';
 
 /**
  * Format bytes to human readable
@@ -357,6 +358,10 @@ export async function add(
     }
   } catch (error) {
     s.stop('Registry lookup failed');
+    if (error instanceof UpgradeRequiredError) {
+      p.outro(pc.red('Installation failed'));
+      throw error;
+    }
     if (error instanceof RateLimitError) {
       p.log.error(`Rate limit exceeded. Please wait ${error.retryAfter} seconds and try again.`);
     } else {
@@ -378,6 +383,10 @@ export async function add(
       ingestResponse = await ingestSkill(ingestUrl);
     } catch (error) {
       s.stop('Submission failed');
+      if (error instanceof UpgradeRequiredError) {
+        p.outro(pc.red('Installation failed'));
+        throw error;
+      }
       if (error instanceof RateLimitError) {
         p.log.error(`Rate limit exceeded. Please wait ${error.retryAfter} seconds and try again.`);
       } else {
@@ -411,6 +420,10 @@ export async function add(
       });
     } catch (error) {
       s.stop('Analysis failed');
+      if (error instanceof UpgradeRequiredError) {
+        p.outro(pc.red('Installation failed'));
+        throw error;
+      }
       p.log.error((error as Error).message);
       p.outro(pc.red('Installation failed'));
       process.exit(1);
@@ -510,6 +523,10 @@ export async function add(
     manifestContent = await downloadArtifact(resolved.version.artifactUrl, resolved.version.hash);
   } catch (error) {
     s.stop('Download failed');
+    if (error instanceof UpgradeRequiredError) {
+      p.outro(pc.red('Installation failed'));
+      throw error;
+    }
     p.log.error((error as Error).message);
     p.outro(pc.red('Installation failed'));
     process.exit(1);
