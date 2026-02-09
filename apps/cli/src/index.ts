@@ -29,7 +29,10 @@ function collect(value: string, previous: string[]): string[] {
   return previous.concat([value]);
 }
 
-function withTelemetry<TArgs extends unknown[]>(commandName: string, fn: (...args: TArgs) => Promise<void>) {
+function withTelemetry<TArgs extends unknown[]>(
+  commandName: string,
+  fn: (...args: TArgs) => Promise<void>
+) {
   return async (...args: TArgs): Promise<void> => {
     const start = performance.now();
     let success = true;

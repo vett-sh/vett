@@ -8,4 +8,3 @@ export class UpgradeRequiredError extends Error {
     this.name = 'UpgradeRequiredError';
   }
 }
-

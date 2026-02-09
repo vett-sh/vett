@@ -20,7 +20,9 @@ export async function upgrade(): Promise<void> {
     if (!latest || !checkedAtMs) return pc.dim('unknown (offline or registry unreachable)');
     const updateAvailable = semver.valid(__VERSION__) && semver.gt(latest, __VERSION__);
     const checkedAt = new Date(checkedAtMs).toLocaleString();
-    const suffix = updateAvailable ? ` ${pc.yellow('(update available)')}` : pc.dim(' (up to date)');
+    const suffix = updateAvailable
+      ? ` ${pc.yellow('(update available)')}`
+      : pc.dim(' (up to date)');
     const source = checked?.source === 'cache' ? pc.dim('cached') : pc.dim('checked');
     return `${pc.cyan(latest)} ${pc.dim(`(${source} ${checkedAt})`)}${suffix}`;
   })();

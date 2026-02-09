@@ -89,9 +89,10 @@ async function fetchJson<T>(path: string, options: RequestInit = {}): Promise<T>
       minVersion?: string;
       currentVersion?: string | null;
     };
-    const min = (errorBody?.minVersion && typeof errorBody.minVersion === 'string'
-      ? errorBody.minVersion
-      : minVersion) ?? null;
+    const min =
+      (errorBody?.minVersion && typeof errorBody.minVersion === 'string'
+        ? errorBody.minVersion
+        : minVersion) ?? null;
     const current =
       typeof errorBody?.currentVersion === 'string' ? errorBody.currentVersion : CLI_VERSION;
     const msg = `CLI is too old for this registry. Minimum supported: ${min ?? 'unknown'}.`;
@@ -136,9 +137,10 @@ async function fetchJsonOrNull<T>(path: string, options: RequestInit = {}): Prom
       minVersion?: string;
       currentVersion?: string | null;
     };
-    const min = (errorBody?.minVersion && typeof errorBody.minVersion === 'string'
-      ? errorBody.minVersion
-      : minVersion) ?? null;
+    const min =
+      (errorBody?.minVersion && typeof errorBody.minVersion === 'string'
+        ? errorBody.minVersion
+        : minVersion) ?? null;
     const current =
       typeof errorBody?.currentVersion === 'string' ? errorBody.currentVersion : CLI_VERSION;
     const msg = `CLI is too old for this registry. Minimum supported: ${min ?? 'unknown'}.`;

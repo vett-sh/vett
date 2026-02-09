@@ -84,7 +84,10 @@ function writeCacheAtomic(path: string, cache: UpdateCacheV1): void {
   renameSync(tmp, path);
 }
 
-async function fetchLatestFromNpm(packageName: string, signal: AbortSignal): Promise<string | null> {
+async function fetchLatestFromNpm(
+  packageName: string,
+  signal: AbortSignal
+): Promise<string | null> {
   const resp = await fetch(`https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`, {
     headers: { 'User-Agent': `vett-cli/${__VERSION__}` },
     signal,

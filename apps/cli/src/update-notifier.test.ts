@@ -99,4 +99,3 @@ describe('update notifier cache', () => {
     expect(res.updateAvailable).toBe(false);
   });
 });
-
