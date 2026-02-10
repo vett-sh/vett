@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/vett-sh/vett/compare/v0.1.1...v0.1.2) (2026-02-10)
+
+
+### Bug Fixes
+
+* align job status enum to 'completed' for CLI contract consistency ([b89389a](https://github.com/vett-sh/vett/commit/b89389a5343c3d4325dcb89896aab80df1b7b0bf))
+* harden registry response validation with Zod schemas ([782ec46](https://github.com/vett-sh/vett/commit/782ec462fef1d81d16e45f6b39816aba4079dc8e))
+
 ## [0.1.1](https://github.com/vett-sh/vett/compare/v0.1.0...v0.1.1) (2026-02-09)
 
 
