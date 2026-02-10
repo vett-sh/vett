@@ -3,13 +3,12 @@ import { skillManifestSchema } from '@vett/core';
 import { computeManifestHash as computeManifestHashCore } from '@vett/core/manifest-hash';
 import { createHash } from 'node:crypto';
 import { UpgradeRequiredError } from './errors';
-import type {
-  Skill,
-  SkillWithLatestVersion,
-  SkillDetail,
-  SkillVersion,
-  SkillManifest,
-} from '@vett/core';
+import {
+  validateSkillDetail,
+  validateSkillsListResponse,
+  assertHttpsUrl,
+} from './lib/registry-safety';
+import type { SkillWithLatestVersion, SkillDetail, SkillManifest } from '@vett/core';
 
 /**
  * Error thrown when the API rate limit is exceeded.
@@ -30,15 +29,6 @@ declare const __VERSION__: string;
 
 // CLI version for identification headers
 const CLI_VERSION = __VERSION__;
-
-interface SearchResponse {
-  skills: SkillWithLatestVersion[];
-  pagination: {
-    limit: number;
-    offset: number;
-    total: number;
-  };
-}
 
 // Ingest API types
 export interface IngestResponse {
@@ -179,8 +169,8 @@ export async function searchSkills(query?: string): Promise<SkillWithLatestVersi
   }
   params.set('limit', '20');
 
-  const response = await fetchJson<SearchResponse>(`/api/v1/skills?${params}`);
-  return response.skills;
+  const response = await fetchJson<unknown>(`/api/v1/skills?${params}`);
+  return validateSkillsListResponse(response);
 }
 
 export async function getSkillByRef(
@@ -190,53 +180,16 @@ export async function getSkillByRef(
 ): Promise<SkillDetail | null> {
   const params = new URLSearchParams({ owner, name });
   if (repo) params.set('repo', repo);
-  return fetchJsonOrNull<SkillDetail>(`/api/v1/skills?${params}`);
+  const raw = await fetchJsonOrNull<unknown>(`/api/v1/skills?${params}`);
+  if (!raw) return null;
+  return validateSkillDetail(raw);
 }
 
 export async function getSkillByUrl(url: string): Promise<SkillDetail | null> {
   const params = new URLSearchParams({ url });
-  return fetchJsonOrNull<SkillDetail>(`/api/v1/skills?${params}`);
-}
-
-export async function getVersion(skillId: string, version: string): Promise<SkillVersion> {
-  return fetchJson<SkillVersion>(`/api/v1/skills/${skillId}/versions/${version}`);
-}
-
-export async function downloadSkill(
-  skillId: string,
-  version?: string
-): Promise<{ url: string; content: ArrayBuffer }> {
-  const baseUrl = getBaseUrl();
-  const ref = version ? `${skillId}@${version}` : skillId;
-  const response = await fetch(`${baseUrl}/api/v1/download/${encodeURIComponent(ref)}`, {
-    redirect: 'follow',
-    headers: getHeaders(),
-  });
-
-  if (response.status === 426) {
-    const minVersion = response.headers.get('X-Vett-Min-Cli-Version');
-    throw new UpgradeRequiredError(
-      `CLI is too old for this registry. Minimum supported: ${minVersion ?? 'unknown'}.`,
-      minVersion,
-      CLI_VERSION
-    );
-  }
-
-  if (response.status === 429) {
-    const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
-    const limit = parseInt(response.headers.get('X-RateLimit-Limit') || '0', 10);
-    const reset = parseInt(response.headers.get('X-RateLimit-Reset') || '0', 10);
-    throw new RateLimitError(retryAfter, limit, reset);
-  }
-
-  if (!response.ok) {
-    throw new Error(`Failed to download: HTTP ${response.status}`);
-  }
-
-  return {
-    url: response.url,
-    content: await response.arrayBuffer(),
-  };
+  const raw = await fetchJsonOrNull<unknown>(`/api/v1/skills?${params}`);
+  if (!raw) return null;
+  return validateSkillDetail(raw);
 }
 
 /**
@@ -298,6 +251,8 @@ export async function downloadArtifact(
   artifactUrl: string,
   expectedHash: string
 ): Promise<ArrayBuffer> {
+  assertHttpsUrl(artifactUrl, 'artifact');
+
   const response = await fetch(artifactUrl, {
     headers: getHeaders(),
   });
