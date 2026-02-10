@@ -99,7 +99,7 @@ async function resolveFromRegistryWithRetries(
   ingestUrl: string,
   expectedRef: { owner?: string; repo?: string; name?: string }
 ): Promise<ResolvedResult> {
-  // Ingest job may flip to "complete" slightly before the skill/version is queryable.
+  // Ingest job may flip to "completed" slightly before the skill/version is queryable.
   const deadline = Date.now() + 10_000;
   let lastError: Error | null = null;
 

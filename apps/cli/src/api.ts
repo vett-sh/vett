@@ -39,7 +39,7 @@ export interface IngestResponse {
 
 export interface JobResponse {
   id: string;
-  status: 'pending' | 'processing' | 'complete' | 'failed';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   stage?: string;
   message?: string;
   hint?: string;
@@ -229,7 +229,7 @@ export async function waitForJob(
       onProgress(job);
     }
 
-    if (job.status === 'complete' || job.status === 'failed') {
+    if (job.status === 'completed' || job.status === 'failed') {
       return job;
     }
 

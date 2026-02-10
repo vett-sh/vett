@@ -35,11 +35,11 @@ describe('waitForJob', () => {
   });
 
   it('resolves when job completes', async () => {
-    mockFetchWith({ id: 'j1', status: 'complete', createdAt: '2024-01-01T00:00:00Z' });
+    mockFetchWith({ id: 'j1', status: 'completed', createdAt: '2024-01-01T00:00:00Z' });
 
     const result = await waitForJob('j1');
 
-    expect(result.status).toBe('complete');
+    expect(result.status).toBe('completed');
   });
 
   it('resolves when job fails', async () => {
