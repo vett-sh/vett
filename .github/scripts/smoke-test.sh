@@ -5,7 +5,17 @@ VERSION="${1#v}"
 VETT="npx -y vett@$VERSION"
 
 echo "Waiting for npm to propagate package..."
-sleep 10
+for i in $(seq 1 12); do
+  if npm view "vett@$VERSION" version >/dev/null 2>&1; then
+    echo "Package available after ~$((i * 10))s"
+    break
+  fi
+  if [ "$i" -eq 12 ]; then
+    echo "Timed out waiting for npm to propagate vett@$VERSION"
+    exit 1
+  fi
+  sleep 10
+done
 
 echo "==> vett --help"
 $VETT --help
