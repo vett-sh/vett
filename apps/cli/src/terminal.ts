@@ -18,6 +18,9 @@ export function capTerminalWidth(): void {
 
   Object.defineProperty(tty, 'columns', {
     get: () => Math.min(realCols, MAX_WIDTH),
+    set: (val: number) => {
+      realCols = val;
+    },
     configurable: true,
   });
 }
