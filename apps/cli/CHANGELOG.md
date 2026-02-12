@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/vett-sh/vett/compare/v0.1.3...v0.2.0) (2026-02-12)
+
+
+### Features
+
+* slug-based API endpoints and smart resolve ([fbafd10](https://github.com/vett-sh/vett/commit/fbafd1085d556c2dbeefd078dc2bc7ce17e35b34))
+
 ## [0.1.3](https://github.com/vett-sh/vett/compare/v0.1.2...v0.1.3) (2026-02-11)
 
 
