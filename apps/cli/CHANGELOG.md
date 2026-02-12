@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/vett-sh/vett/compare/v0.1.2...v0.1.3) (2026-02-11)
+
+
+### Bug Fixes
+
+* add setter to stdout.columns override to prevent crash on terminal resize ([976e768](https://github.com/vett-sh/vett/commit/976e768fdc6f386698b639e0a2a268898ad42e8e))
+
 ## [0.1.2](https://github.com/vett-sh/vett/compare/v0.1.1...v0.1.2) (2026-02-10)
 
 
