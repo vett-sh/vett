@@ -76,14 +76,14 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Smoke test
+        run: .github/scripts/smoke-test.sh "$TAG_REF"
+        env:
+          TAG_REF: ${{ steps.tag.outputs.tag }}
+
       - name: Publish to npm
         working-directory: apps/cli
         run: npm publish --access public --tag ${{ steps.tag.outputs.npm_tag }} --provenance
         env:
           NPM_CONFIG_PROVENANCE: true
           NODE_AUTH_TOKEN: ''
-
-      - name: Smoke test
-        run: .github/scripts/smoke-test.sh "$TAG_REF"
-        env:
-          TAG_REF: ${{ steps.tag.outputs.tag }}

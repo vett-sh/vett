@@ -44,3 +44,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Smoke test
+        run: .github/scripts/smoke-test.sh

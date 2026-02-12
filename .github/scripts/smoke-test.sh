@@ -1,35 +1,24 @@
 #!/bin/bash
 set -euo pipefail
 
-VERSION="${1#v}"
-VETT="npx -y vett@$VERSION"
+VETT="node ${GITHUB_WORKSPACE:-$(git rev-parse --show-toplevel)}/apps/cli/dist/index.mjs"
 
-echo "Waiting for npm to propagate package..."
-for i in $(seq 1 12); do
-  if npm view "vett@$VERSION" version >/dev/null 2>&1; then
-    echo "Package available after ~$((i * 10))s"
-    break
-  fi
-  if [ "$i" -eq 12 ]; then
-    echo "Timed out waiting for npm to propagate vett@$VERSION"
+# If a version tag is provided, verify it matches --version output
+if [ -n "${1:-}" ]; then
+  EXPECTED_VERSION="${1#v}"
+  echo "==> vett --version (expecting $EXPECTED_VERSION)"
+  OUTPUT=$($VETT --version)
+  OUTPUT_VERSION="${OUTPUT#v}"
+  if [[ "$OUTPUT_VERSION" == "$EXPECTED_VERSION" ]]; then
+    echo "✓ Version matches: $OUTPUT_VERSION"
+  else
+    echo "✗ Version mismatch: expected $EXPECTED_VERSION, got $OUTPUT_VERSION"
     exit 1
   fi
-  sleep 10
-done
+fi
 
 echo "==> vett --help"
 $VETT --help
-
-echo "==> vett --version"
-OUTPUT=$($VETT --version)
-OUTPUT_VERSION="${OUTPUT#v}"
-
-if [[ "$OUTPUT_VERSION" == "$VERSION" ]]; then
-  echo "✓ Version matches: $OUTPUT_VERSION"
-else
-  echo "✗ Version mismatch: expected $VERSION, got $OUTPUT_VERSION"
-  exit 1
-fi
 
 echo "==> vett agents"
 $VETT agents
