@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { loadIndex, saveIndex } from '../config';
+import { loadIndex, saveIndex, backfillSlug } from '../config';
 import { agents, detectInstalledAgents, type AgentType } from '../agents';
 import {
   installToAgent,
@@ -108,9 +108,7 @@ export async function sync(options: { fix?: boolean; addNew?: boolean }): Promis
     p.log.info(`${newAgentSkills.length} skill(s) can be added to newly detected agents`);
     const grouped = new Map<string, AgentType[]>();
     for (const { skill, agent } of newAgentSkills) {
-      const key = skill.repo
-        ? `${skill.owner}/${skill.repo}/${skill.name}`
-        : `${skill.owner}/${skill.name}`;
+      const key = skill.slug ?? backfillSlug(skill);
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(agent);
     }

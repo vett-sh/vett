@@ -54,7 +54,7 @@ export interface SkillVersion {
   skillId: string;
   version: string;
   hash: string;
-  artifactUrl: string;
+
   size: number;
   risk: RiskLevel | null;
   summary: string | null;
@@ -85,6 +85,8 @@ export interface InstalledSkill {
   version: string;
   installedAt: Date;
   path: string;
+  /** Canonical slug identifier (e.g. "acme/tools/hello" or "example.com/hello") */
+  slug?: string;
   /** Agents this skill is installed to */
   agents?: string[];
   /** Installation scope: global (user-level) or project */

@@ -17,7 +17,7 @@ export const skillVersionSchema = z.object({
   skillId: z.string().uuid(),
   version: z.string().min(1).max(50),
   hash: z.string().length(64),
-  artifactUrl: z.string().url(),
+
   size: z.number().int().min(0),
   risk: z.enum(RISK_LEVELS).nullable(),
   summary: z.string().nullable(),
@@ -70,7 +70,7 @@ export type SkillVersionInput = z.infer<typeof skillVersionSchema>;
 export type SearchQuery = z.infer<typeof searchQuerySchema>;
 
 // ---------------------------------------------------------------------------
-// API response validation schemas
+// Path safety utilities
 // Used by the CLI to validate untrusted registry responses before constructing
 // filesystem paths (~/.vett/skills/<owner>/<repo>/<name>).
 // ---------------------------------------------------------------------------
@@ -95,63 +95,3 @@ export const safePathSegmentSchema = z
   .min(1)
   .max(200)
   .refine(isSafePathSegment, 'Value is not a safe path segment');
-
-export const httpsUrlSchema = z
-  .string()
-  .url()
-  .refine((url) => {
-    try {
-      return new URL(url).protocol === 'https:';
-    } catch {
-      return false;
-    }
-  }, 'URL must use the https: scheme');
-
-export const apiSkillSchema = z
-  .object({
-    id: z.string().uuid(),
-    owner: safePathSegmentSchema,
-    repo: safePathSegmentSchema.nullable(),
-    name: safePathSegmentSchema,
-    description: z.string().max(1000).nullable(),
-    sourceUrl: z.string().nullable(),
-    installCount: z.number().int().min(0),
-    createdAt: z.coerce.date(),
-    updatedAt: z.coerce.date(),
-  })
-  .passthrough();
-
-export const apiSkillVersionSchema = z
-  .object({
-    id: z.string().uuid(),
-    skillId: z.string().uuid(),
-    version: z.string().min(1).max(50),
-    hash: z.string().length(64),
-    artifactUrl: httpsUrlSchema,
-    size: z.number().int().min(0),
-    risk: z.enum(RISK_LEVELS).nullable(),
-    summary: z.string().nullable(),
-    analysis: z.unknown().nullable(),
-    gitRef: z.string().max(255).nullable(),
-    commitSha: z.string().length(40).nullable(),
-    sourceFingerprint: z.string().max(64).nullable(),
-    sigstoreBundle: z.unknown().nullable(),
-    analyzedAt: z.coerce.date().nullable(),
-    scanStatus: z.enum(SCAN_STATUSES),
-    createdAt: z.coerce.date(),
-  })
-  .passthrough();
-
-export const apiSkillDetailSchema = apiSkillSchema.extend({
-  versions: z.array(apiSkillVersionSchema),
-});
-
-export const apiSkillWithLatestVersionSchema = apiSkillSchema.extend({
-  latestVersion: apiSkillVersionSchema.nullable(),
-});
-
-export const apiSkillsListResponseSchema = z
-  .object({
-    skills: z.array(apiSkillWithLatestVersionSchema),
-  })
-  .passthrough();

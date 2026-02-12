@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { loadIndex, removeInstalledSkill } from '../config';
+import { loadIndex, removeInstalledSkillBySlug, backfillSlug } from '../config';
 import { agents, type AgentType } from '../agents';
 import { removeFromAgent, isPathSafe } from '../installer';
 import type { InstalledSkill } from '@vett/core';
@@ -68,11 +68,19 @@ export type FindResult =
 
 /**
  * Find a skill by reference.
+ * Tries slug match first, then falls back to triple/name matching.
  * O(n) where n = number of installed skills. Fine for typical use (< 100 skills).
  */
 export function findSkillByRef(skills: InstalledSkill[], ref: ParsedRef): FindResult {
-  // Full reference - exact match (3-part with repo, or 2-part domain without repo)
+  // Construct a potential slug from the parsed ref and try slug match first
   if (ref.owner) {
+    const potentialSlug = ref.repo
+      ? `${ref.owner}/${ref.repo}/${ref.name}`
+      : `${ref.owner}/${ref.name}`;
+    const bySlug = skills.find((s) => s.slug === potentialSlug);
+    if (bySlug) return { status: 'found', skill: bySlug };
+
+    // Fall back to triple match
     const skill = skills.find(
       (s) =>
         s.owner === ref.owner &&
@@ -160,7 +168,8 @@ export async function remove(
   if (result.status === 'ambiguous') {
     p.log.error(`Multiple skills match "${skillRef}":`);
     for (const m of result.matches) {
-      console.log(`  · ${m.repo ? `${m.owner}/${m.repo}/${m.name}` : `${m.owner}/${m.name}`}`);
+      const slug = m.slug ?? backfillSlug(m);
+      console.log(`  · ${slug}`);
     }
     p.log.info('Specify the full reference: owner/repo/name or owner/name');
     p.outro(pc.red('Removal failed'));
@@ -168,9 +177,7 @@ export async function remove(
   }
 
   const skill = result.skill;
-  const fullRef = skill.repo
-    ? `${skill.owner}/${skill.repo}/${skill.name}`
-    : `${skill.owner}/${skill.name}`;
+  const slug = skill.slug ?? backfillSlug(skill);
 
   // Validate path safety
   if (!isSafeToDelete(skill.path)) {
@@ -181,7 +188,7 @@ export async function remove(
   }
 
   // Show what will be removed
-  p.log.info(`Skill: ${pc.bold(fullRef)}`);
+  p.log.info(`Skill: ${pc.bold(slug)}`);
   p.log.info(`Path: ${pc.dim(skill.path)}`);
 
   const installedAgents = (skill.agents || []) as AgentType[];
@@ -200,7 +207,7 @@ export async function remove(
   // Confirm removal
   if (!options.yes) {
     const confirm = await p.confirm({
-      message: `Remove ${pc.bold(fullRef)}?`,
+      message: `Remove ${pc.bold(slug)}?`,
       initialValue: false,
     });
 
@@ -246,8 +253,8 @@ export async function remove(
   }
 
   // Update config
-  removeInstalledSkill(skill.owner, skill.repo, skill.name);
+  removeInstalledSkillBySlug(slug);
 
-  p.log.success(`Removed ${fullRef}`);
+  p.log.success(`Removed ${slug}`);
   p.outro(pc.green('Done'));
 }

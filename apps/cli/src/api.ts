@@ -6,9 +6,14 @@ import { UpgradeRequiredError } from './errors';
 import {
   validateSkillDetail,
   validateSkillsListResponse,
-  assertHttpsUrl,
+  validateResolveResponse,
 } from './lib/registry-safety';
-import type { SkillWithLatestVersion, SkillDetail, SkillManifest } from '@vett/core';
+import type { SkillManifest } from '@vett/core';
+import type {
+  ApiSkillWithLatestVersion,
+  ApiSkillDetail,
+  ApiResolveResponse,
+} from './lib/api-types';
 
 /**
  * Error thrown when the API rate limit is exceeded.
@@ -30,13 +35,6 @@ declare const __VERSION__: string;
 // CLI version for identification headers
 const CLI_VERSION = __VERSION__;
 
-// Ingest API types
-export interface IngestResponse {
-  jobId: string;
-  status: string;
-  skillId: string;
-}
-
 export interface JobResponse {
   id: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
@@ -44,6 +42,7 @@ export interface JobResponse {
   message?: string;
   hint?: string;
   error?: string;
+  slug?: string;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -162,7 +161,7 @@ async function fetchJsonOrNull<T>(path: string, options: RequestInit = {}): Prom
   return response.json() as Promise<T>;
 }
 
-export async function searchSkills(query?: string): Promise<SkillWithLatestVersion[]> {
+export async function searchSkills(query?: string): Promise<ApiSkillWithLatestVersion[]> {
   const params = new URLSearchParams();
   if (query) {
     params.set('q', query);
@@ -173,36 +172,30 @@ export async function searchSkills(query?: string): Promise<SkillWithLatestVersi
   return validateSkillsListResponse(response);
 }
 
-export async function getSkillByRef(
-  owner: string,
-  repo: string | null,
-  name: string
-): Promise<SkillDetail | null> {
-  const params = new URLSearchParams({ owner, name });
-  if (repo) params.set('repo', repo);
-  const raw = await fetchJsonOrNull<unknown>(`/api/v1/skills?${params}`);
-  if (!raw) return null;
-  return validateSkillDetail(raw);
-}
-
-export async function getSkillByUrl(url: string): Promise<SkillDetail | null> {
-  const params = new URLSearchParams({ url });
-  const raw = await fetchJsonOrNull<unknown>(`/api/v1/skills?${params}`);
+/**
+ * Get full skill detail by slug.
+ * The slug contains slashes (e.g. "acme/tools/hello") — NOT encoded,
+ * the server uses a catch-all route.
+ */
+export async function getSkillDetail(slug: string): Promise<ApiSkillDetail | null> {
+  const raw = await fetchJsonOrNull<unknown>(`/api/v1/skills/${slug}`);
   if (!raw) return null;
   return validateSkillDetail(raw);
 }
 
 /**
- * Submit a URL for ingestion
+ * Find or ingest a skill. Accepts any input the CLI accepts (ref, URL, slug).
+ * The server handles lookup, freshness checking, and ingestion.
  */
-export async function ingestSkill(url: string): Promise<IngestResponse> {
-  return fetchJson<IngestResponse>('/api/v1/ingest', {
+export async function resolveSkill(input: string): Promise<ApiResolveResponse> {
+  const raw = await fetchJson<unknown>('/api/v1/resolve', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ input }),
   });
+  return validateResolveResponse(raw);
 }
 
 /**
@@ -245,15 +238,17 @@ export async function waitForJob(
 }
 
 /**
- * Download artifact and verify hash
+ * Download artifact via the registry download endpoint and verify hash.
+ * Routes through `/api/v1/download/{skillId}@{version}` so the server
+ * can track install counts.
  */
 export async function downloadArtifact(
-  artifactUrl: string,
+  skillId: string,
+  version: string,
   expectedHash: string
 ): Promise<ArrayBuffer> {
-  assertHttpsUrl(artifactUrl, 'artifact');
-
-  const response = await fetch(artifactUrl, {
+  const baseUrl = getBaseUrl();
+  const response = await fetch(`${baseUrl}/api/v1/download/${skillId}@${version}`, {
     headers: getHeaders(),
   });
 

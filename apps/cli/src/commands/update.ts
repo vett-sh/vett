@@ -1,7 +1,7 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { loadIndex, getInstalledSkill } from '../config';
-import { getSkillByRef } from '../api';
+import { loadIndex, getInstalledSkillBySlug, backfillSlug } from '../config';
+import { getSkillDetail } from '../api';
 import { UpgradeRequiredError } from '../errors';
 import { add } from './add';
 
@@ -11,15 +11,8 @@ export async function update(skillRef?: string): Promise<void> {
   const index = loadIndex();
 
   if (skillRef) {
-    const parts = skillRef.split('/');
-    if (parts.length !== 3) {
-      p.log.error('Invalid skill reference. Format: owner/repo/skill');
-      p.outro(pc.red('Failed'));
-      process.exit(1);
-    }
-
-    const [owner, repo, name] = parts;
-    const installed = getInstalledSkill(owner, repo, name);
+    // Accept slug or name — match against stored slug or name
+    const installed = index.installedSkills.find((s) => s.slug === skillRef || s.name === skillRef);
 
     if (!installed) {
       p.log.error(`Skill not installed: ${skillRef}`);
@@ -27,7 +20,8 @@ export async function update(skillRef?: string): Promise<void> {
       process.exit(1);
     }
 
-    await updateSkill(owner, repo, name, installed.version);
+    const slug = installed.slug ?? backfillSlug(installed);
+    await updateSkill(slug, installed.version);
   } else {
     const skills = index.installedSkills;
 
@@ -42,7 +36,8 @@ export async function update(skillRef?: string): Promise<void> {
 
     let updated = 0;
     for (const skill of skills) {
-      const didUpdate = await updateSkill(skill.owner, skill.repo, skill.name, skill.version);
+      const slug = skill.slug ?? backfillSlug(skill);
+      const didUpdate = await updateSkill(slug, skill.version);
       if (didUpdate) updated++;
     }
 
@@ -58,38 +53,31 @@ export async function update(skillRef?: string): Promise<void> {
   p.outro(pc.dim('Done'));
 }
 
-async function updateSkill(
-  owner: string,
-  repo: string | null,
-  name: string,
-  currentVersion: string
-): Promise<boolean> {
-  const ref = repo ? `${owner}/${repo}/${name}` : `${owner}/${name}`;
-
+async function updateSkill(slug: string, currentVersion: string): Promise<boolean> {
   try {
-    const skill = await getSkillByRef(owner, repo, name);
+    const skill = await getSkillDetail(slug);
     if (!skill) {
-      p.log.warn(`${ref}: not found in registry`);
+      p.log.warn(`${slug}: not found in registry`);
       return false;
     }
 
     const latestVersion = skill.versions[0]?.version;
     if (!latestVersion) {
-      p.log.warn(`${ref}: no versions available`);
+      p.log.warn(`${slug}: no versions available`);
       return false;
     }
 
     if (latestVersion === currentVersion) {
-      p.log.info(pc.dim(`${ref}: up to date (${currentVersion})`));
+      p.log.info(pc.dim(`${slug}: up to date (${currentVersion})`));
       return false;
     }
 
-    p.log.step(`${ref}: ${currentVersion} ${pc.dim('->')} ${latestVersion}`);
-    await add(ref, { force: true, yes: true });
+    p.log.step(`${slug}: ${currentVersion} ${pc.dim('->')} ${latestVersion}`);
+    await add(slug, { force: true, yes: true });
     return true;
   } catch (error) {
     if (error instanceof UpgradeRequiredError) throw error;
-    p.log.error(`${ref}: failed to update - ${(error as Error).message}`);
+    p.log.error(`${slug}: failed to update - ${(error as Error).message}`);
     return false;
   }
 }

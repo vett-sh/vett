@@ -1,6 +1,7 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import type { RiskLevel, SkillWithLatestVersion } from '@vett/core';
+import type { RiskLevel } from '@vett/core';
+import type { ApiSkillWithLatestVersion } from '../lib/api-types';
 import { searchSkills } from '../api';
 import { UpgradeRequiredError } from '../errors';
 import { add } from './add';
@@ -32,10 +33,10 @@ function formatRisk(risk: RiskLevel | null | undefined): string {
   }
 }
 
-function formatSkillNote(skill: SkillWithLatestVersion): string {
+function formatSkillNote(skill: ApiSkillWithLatestVersion): string {
   const lines: string[] = [];
   const risk = formatRisk(skill.latestVersion?.risk as RiskLevel | null);
-  const installs = formatInstalls(skill.installCount);
+  const installs = formatInstalls(skill.installCount ?? 0);
 
   lines.push(`${risk} ${pc.dim('·')} ${installs} installs`);
 
@@ -81,22 +82,19 @@ export async function search(query: string): Promise<void> {
   const labelWidth = (process.stdout.columns || 80) - 6;
 
   const options = skills.map((skill) => {
-    const skillRef = skill.repo
-      ? `${skill.owner}/${skill.repo}/${pc.bold(skill.name)}`
-      : `${skill.owner}/${pc.bold(skill.name)}`;
-    const skillValue = skill.repo
-      ? `${skill.owner}/${skill.repo}/${skill.name}`
-      : `${skill.owner}/${skill.name}`;
+    const slugParts = skill.slug.split('/');
+    const skillName = slugParts[slugParts.length - 1];
+    const skillLabel = skill.slug.replace(new RegExp(`${skillName}$`), pc.bold(skillName));
     const risk = formatRisk(skill.latestVersion?.risk as RiskLevel | null);
-    const installs = formatInstalls(skill.installCount);
+    const installs = formatInstalls(skill.installCount ?? 0);
     const meta = pc.dim(`${installs} ·`) + ` ${risk}`;
     const desc = skill.description
       ? `\n    ${pc.dim(truncate(skill.description, labelWidth - 4))}`
       : '';
 
     return {
-      value: skillValue,
-      label: `${skillRef}  ${meta}${desc}`,
+      value: skill.slug,
+      label: `${skillLabel}  ${meta}${desc}`,
     };
   });
 
@@ -113,10 +111,8 @@ export async function search(query: string): Promise<void> {
       return;
     }
 
-    const skill = skills.find(
-      (s) => (s.repo ? `${s.owner}/${s.repo}/${s.name}` : `${s.owner}/${s.name}`) === selected
-    )!;
-    p.note(formatSkillNote(skill), selected);
+    const skill = skills.find((s) => s.slug === selected)!;
+    p.note(formatSkillNote(skill), skill.slug);
 
     const confirm = await p.confirm({
       message: `Install ${pc.bold(selected)}?`,

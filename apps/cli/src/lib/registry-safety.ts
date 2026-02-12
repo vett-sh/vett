@@ -1,5 +1,9 @@
-import { apiSkillDetailSchema, apiSkillsListResponseSchema } from '@vett/core';
-import type { SkillDetail, SkillWithLatestVersion } from '@vett/core';
+import {
+  apiSkillDetailSchema,
+  apiSkillsListResponseSchema,
+  apiResolveResponseSchema,
+} from './api-schemas';
+import type { ApiSkillDetail, ApiSkillWithLatestVersion, ApiResolveResponse } from './api-types';
 
 interface ZodIssue {
   path: (string | number)[];
@@ -14,30 +18,26 @@ function formatZodIssues(issues: ZodIssue[]): string {
   return 'Registry returned an invalid response.';
 }
 
-export function validateSkillDetail(raw: unknown): SkillDetail {
+export function validateSkillDetail(raw: unknown): ApiSkillDetail {
   const result = apiSkillDetailSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(formatZodIssues(result.error.issues));
   }
-  return result.data as unknown as SkillDetail;
+  return result.data;
 }
 
-export function validateSkillsListResponse(raw: unknown): SkillWithLatestVersion[] {
+export function validateSkillsListResponse(raw: unknown): ApiSkillWithLatestVersion[] {
   const result = apiSkillsListResponseSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(formatZodIssues(result.error.issues));
   }
-  return result.data.skills as unknown as SkillWithLatestVersion[];
+  return result.data.skills;
 }
 
-export function assertHttpsUrl(url: string, context: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(`${context} URL is malformed.`);
+export function validateResolveResponse(raw: unknown): ApiResolveResponse {
+  const result = apiResolveResponseSchema.safeParse(raw);
+  if (!result.success) {
+    throw new Error(formatZodIssues(result.error.issues));
   }
-  if (parsed.protocol !== 'https:') {
-    throw new Error(`${context} URL must use https: scheme, got ${parsed.protocol}`);
-  }
+  return result.data;
 }

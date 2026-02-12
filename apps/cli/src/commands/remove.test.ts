@@ -63,6 +63,7 @@ describe('findSkillByRef', () => {
       version: '1.0',
       installedAt: new Date(),
       path: '/home/user/.vett/skills/acme/tools/commit',
+      slug: 'acme/tools/commit',
     },
     {
       owner: 'acme',
@@ -71,6 +72,7 @@ describe('findSkillByRef', () => {
       version: '1.0',
       installedAt: new Date(),
       path: '/home/user/.vett/skills/acme/tools/review',
+      slug: 'acme/tools/review',
     },
     {
       owner: 'other',
@@ -79,6 +81,7 @@ describe('findSkillByRef', () => {
       version: '2.0',
       installedAt: new Date(),
       path: '/home/user/.vett/skills/other/stuff/commit',
+      slug: 'other/stuff/commit',
     },
     {
       owner: 'coinbase.com',
@@ -87,6 +90,7 @@ describe('findSkillByRef', () => {
       version: '1.0',
       installedAt: new Date(),
       path: '/home/user/.vett/skills/coinbase.com/default',
+      slug: 'coinbase.com/default',
     },
     {
       owner: 'x.com',
@@ -95,6 +99,7 @@ describe('findSkillByRef', () => {
       version: '1.0',
       installedAt: new Date(),
       path: '/home/user/.vett/skills/x.com/x',
+      slug: 'x.com/x',
     },
   ];
 
@@ -107,6 +112,14 @@ describe('findSkillByRef', () => {
     }
   });
 
+  it('finds by slug match', () => {
+    const result = findSkillByRef(skills, { owner: 'acme', repo: 'tools', name: 'commit' });
+    expect(result.status).toBe('found');
+    if (result.status === 'found') {
+      expect(result.skill.slug).toBe('acme/tools/commit');
+    }
+  });
+
   it('finds domain skill by owner/name (no repo)', () => {
     const result = findSkillByRef(skills, { owner: 'coinbase.com', name: 'default' });
     expect(result.status).toBe('found');
@@ -114,6 +127,7 @@ describe('findSkillByRef', () => {
       expect(result.skill.owner).toBe('coinbase.com');
       expect(result.skill.repo).toBeNull();
       expect(result.skill.name).toBe('default');
+      expect(result.skill.slug).toBe('coinbase.com/default');
     }
   });
 
@@ -160,5 +174,25 @@ describe('findSkillByRef', () => {
   it('handles empty skills list', () => {
     const result = findSkillByRef([], { name: 'anything' });
     expect(result.status).toBe('not_found');
+  });
+
+  it('finds skills without slug field via triple match', () => {
+    const legacySkills: InstalledSkill[] = [
+      {
+        owner: 'acme',
+        repo: 'tools',
+        name: 'legacy',
+        version: '1.0',
+        installedAt: new Date(),
+        path: '/home/user/.vett/skills/acme/tools/legacy',
+        // no slug field
+      },
+    ];
+    const result = findSkillByRef(legacySkills, {
+      owner: 'acme',
+      repo: 'tools',
+      name: 'legacy',
+    });
+    expect(result.status).toBe('found');
   });
 });

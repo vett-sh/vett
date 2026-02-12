@@ -189,6 +189,14 @@ function normalizeConfig(raw: unknown): {
   };
 }
 
+/**
+ * Construct a slug from the (owner, repo, name) triple.
+ * Returns "owner/repo/name" for GitHub-style skills, "owner/name" for domain sources (null repo).
+ */
+export function backfillSlug(skill: InstalledSkill): string {
+  return skill.repo ? `${skill.owner}/${skill.repo}/${skill.name}` : `${skill.owner}/${skill.name}`;
+}
+
 function normalizeIndex(raw: unknown): { index: VettIndex; changed: boolean } {
   let changed = false;
 
@@ -204,6 +212,14 @@ function normalizeIndex(raw: unknown): { index: VettIndex; changed: boolean } {
     ? (raw.installedSkills as InstalledSkill[])
     : DEFAULT_INDEX.installedSkills;
   if (raw.installedSkills !== undefined && !Array.isArray(raw.installedSkills)) changed = true;
+
+  // Backfill slug on every skill that doesn't have one
+  for (const skill of installedSkills) {
+    if (!skill.slug) {
+      skill.slug = backfillSlug(skill);
+      changed = true;
+    }
+  }
 
   return {
     index: {
@@ -315,9 +331,18 @@ export function getSkillDir(owner: string, repo: string | null, name: string): s
 }
 
 export function addInstalledSkill(skill: InstalledSkill): void {
+  // Ensure slug is set
+  if (!skill.slug) {
+    skill.slug = backfillSlug(skill);
+  }
+
   const index = loadIndex();
+
+  // Match by slug first, fall back to triple for legacy entries
   const existingIndex = index.installedSkills.findIndex(
-    (s) => s.owner === skill.owner && s.repo === skill.repo && s.name === skill.name
+    (s) =>
+      (s.slug && s.slug === skill.slug) ||
+      (s.owner === skill.owner && s.repo === skill.repo && s.name === skill.name)
   );
 
   if (existingIndex >= 0) {
@@ -344,6 +369,17 @@ export function getInstalledSkill(
 ): InstalledSkill | undefined {
   const index = loadIndex();
   return index.installedSkills.find((s) => s.owner === owner && s.repo === repo && s.name === name);
+}
+
+export function getInstalledSkillBySlug(slug: string): InstalledSkill | undefined {
+  const index = loadIndex();
+  return index.installedSkills.find((s) => s.slug === slug);
+}
+
+export function removeInstalledSkillBySlug(slug: string): void {
+  const index = loadIndex();
+  index.installedSkills = index.installedSkills.filter((s) => s.slug !== slug);
+  saveIndex(index);
 }
 
 export function isTelemetryEnabled(): boolean {

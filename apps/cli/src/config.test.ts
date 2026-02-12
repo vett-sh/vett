@@ -211,6 +211,153 @@ describe('config storage', () => {
     expect(getDeviceId()).toBe(config.telemetry.deviceId);
   });
 
+  it('backfills slug on loadIndex for skills without slug', async () => {
+    const configDir = join(tempHome, '.vett');
+    mkdirSync(configDir, { recursive: true });
+
+    writeFileSync(
+      join(configDir, 'index.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        installedSkills: [
+          {
+            owner: 'acme',
+            repo: 'tools',
+            name: 'commit',
+            version: '1.0.0',
+            installedAt: '2026-01-01T00:00:00.000Z',
+            path: '/tmp/skills/acme/tools/commit',
+          },
+          {
+            owner: 'example.com',
+            repo: null,
+            name: 'default',
+            version: '1.0.0',
+            installedAt: '2026-01-01T00:00:00.000Z',
+            path: '/tmp/skills/example.com/default',
+          },
+        ],
+      })
+    );
+
+    const { loadIndex } = await loadConfigModule();
+    const index = loadIndex();
+
+    expect(index.installedSkills[0]?.slug).toBe('acme/tools/commit');
+    expect(index.installedSkills[1]?.slug).toBe('example.com/default');
+  });
+
+  it('preserves existing slug on loadIndex', async () => {
+    const configDir = join(tempHome, '.vett');
+    mkdirSync(configDir, { recursive: true });
+
+    writeFileSync(
+      join(configDir, 'index.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        installedSkills: [
+          {
+            owner: 'acme',
+            repo: 'tools',
+            name: 'commit',
+            version: '1.0.0',
+            installedAt: '2026-01-01T00:00:00.000Z',
+            path: '/tmp/skills/acme/tools/commit',
+            slug: 'acme/tools/commit',
+          },
+        ],
+      })
+    );
+
+    const { loadIndex } = await loadConfigModule();
+    const index = loadIndex();
+
+    expect(index.installedSkills[0]?.slug).toBe('acme/tools/commit');
+  });
+
+  it('getInstalledSkillBySlug finds skill by slug', async () => {
+    const { addInstalledSkill, getInstalledSkillBySlug } = await loadConfigModule();
+
+    addInstalledSkill({
+      owner: 'acme',
+      repo: 'tools',
+      name: 'commit',
+      version: '1.0.0',
+      installedAt: new Date('2026-01-01T00:00:00.000Z'),
+      path: '/tmp/skills/acme/tools/commit',
+      slug: 'acme/tools/commit',
+    });
+
+    const found = getInstalledSkillBySlug('acme/tools/commit');
+    expect(found).toBeDefined();
+    expect(found?.name).toBe('commit');
+
+    const notFound = getInstalledSkillBySlug('other/repo/skill');
+    expect(notFound).toBeUndefined();
+  });
+
+  it('removeInstalledSkillBySlug removes skill by slug', async () => {
+    const { addInstalledSkill, removeInstalledSkillBySlug, loadIndex } = await loadConfigModule();
+
+    addInstalledSkill({
+      owner: 'acme',
+      repo: 'tools',
+      name: 'commit',
+      version: '1.0.0',
+      installedAt: new Date('2026-01-01T00:00:00.000Z'),
+      path: '/tmp/skills/acme/tools/commit',
+      slug: 'acme/tools/commit',
+    });
+
+    removeInstalledSkillBySlug('acme/tools/commit');
+    const index = loadIndex();
+    expect(index.installedSkills).toHaveLength(0);
+  });
+
+  it('addInstalledSkill matches by slug for updates', async () => {
+    const { addInstalledSkill, loadIndex } = await loadConfigModule();
+
+    addInstalledSkill({
+      owner: 'acme',
+      repo: 'tools',
+      name: 'commit',
+      version: '1.0.0',
+      installedAt: new Date('2026-01-01T00:00:00.000Z'),
+      path: '/tmp/skills/acme/tools/commit',
+      slug: 'acme/tools/commit',
+    });
+
+    addInstalledSkill({
+      owner: 'acme',
+      repo: 'tools',
+      name: 'commit',
+      version: '2.0.0',
+      installedAt: new Date('2026-02-01T00:00:00.000Z'),
+      path: '/tmp/skills/acme/tools/commit',
+      slug: 'acme/tools/commit',
+    });
+
+    const index = loadIndex();
+    expect(index.installedSkills).toHaveLength(1);
+    expect(index.installedSkills[0]?.version).toBe('2.0.0');
+  });
+
+  it('addInstalledSkill auto-generates slug from triple when missing', async () => {
+    const { addInstalledSkill, loadIndex } = await loadConfigModule();
+
+    addInstalledSkill({
+      owner: 'acme',
+      repo: 'tools',
+      name: 'commit',
+      version: '1.0.0',
+      installedAt: new Date('2026-01-01T00:00:00.000Z'),
+      path: '/tmp/skills/acme/tools/commit',
+    });
+
+    const index = loadIndex();
+    expect(index.installedSkills[0]?.slug).toBe('acme/tools/commit');
+  });
+
   it('clears stale lock files', async () => {
     const { saveConfig } = await loadConfigModule();
 

@@ -1,26 +1,13 @@
-import { createHash } from 'node:crypto';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, normalize, sep } from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import {
-  ingestSkill,
-  waitForJob,
-  downloadArtifact,
-  getSkillByRef,
-  getSkillByUrl,
-  RateLimitError,
-} from '../api';
-import { getSkillDir, addInstalledSkill, getInstalledSkill } from '../config';
+import { resolveSkill, waitForJob, downloadArtifact, getSkillDetail, RateLimitError } from '../api';
+import { getSkillDir, addInstalledSkill, getInstalledSkillBySlug } from '../config';
 import { verifyManifestOrThrow } from '../signatures';
-import { createSkillManifestSchema, skillRefSchema, parseSkillUrl } from '@vett/core';
-import type {
-  AnalysisResult,
-  RiskLevel,
-  SkillManifest,
-  SkillDetail,
-  SkillVersion,
-} from '@vett/core';
+import { createSkillManifestSchema } from '@vett/core';
+import type { AnalysisResult, RiskLevel, SkillManifest } from '@vett/core';
+import type { ApiSkillDetail, ApiSkillVersion } from '../lib/api-types';
 import { detectInstalledAgents, parseAgentTypes, agents, type AgentType } from '../agents';
 import { installToAgents } from '../installer';
 import { assertNoSymlinkPathComponents } from '../lib/fs-safety';
@@ -51,7 +38,6 @@ function getVerdict(risk: RiskLevel | null): 'verified' | 'review' | 'caution' |
 interface VersionInfo {
   version: string;
   hash: string;
-  artifactUrl: string;
   size: number;
   risk: RiskLevel | null;
   summary: string | null;
@@ -60,6 +46,7 @@ interface VersionInfo {
 }
 
 interface SkillInfo {
+  slug: string;
   owner: string;
   repo: string | null;
   name: string;
@@ -69,50 +56,6 @@ interface SkillInfo {
 interface ResolvedResult {
   skill: SkillInfo;
   version: VersionInfo;
-}
-
-async function resolveFromPublicRegistry(
-  ingestUrl: string,
-  expectedRef: { owner?: string; repo?: string; name?: string }
-): Promise<ResolvedResult> {
-  // Prefer URL lookup (works even if repo/name parsing changes); fall back to name lookup if present.
-  const byUrl = await getSkillByUrl(ingestUrl);
-  const skill: SkillDetail | null =
-    byUrl ??
-    (expectedRef.owner && expectedRef.repo && expectedRef.name
-      ? await getSkillByRef(expectedRef.owner, expectedRef.repo, expectedRef.name)
-      : null);
-
-  if (!skill || !skill.versions || skill.versions.length === 0) {
-    throw new Error('Skill not found in registry after ingestion completed');
-  }
-
-  // The API returns versions sorted newest-first; take the latest.
-  const version: SkillVersion = skill.versions[0]!;
-  return {
-    skill: toSkillInfo(skill),
-    version: toVersionInfo(version),
-  };
-}
-
-async function resolveFromRegistryWithRetries(
-  ingestUrl: string,
-  expectedRef: { owner?: string; repo?: string; name?: string }
-): Promise<ResolvedResult> {
-  // Ingest job may flip to "completed" slightly before the skill/version is queryable.
-  const deadline = Date.now() + 10_000;
-  let lastError: Error | null = null;
-
-  while (Date.now() < deadline) {
-    try {
-      return await resolveFromPublicRegistry(ingestUrl, expectedRef);
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error('Failed to resolve from registry');
-      await new Promise((r) => setTimeout(r, 500));
-    }
-  }
-
-  throw lastError ?? new Error('Failed to resolve from registry');
 }
 
 function formatSkillInfo(result: ResolvedResult): string {
@@ -237,51 +180,6 @@ function assertPathWithinBase(baseDir: string, filePath: string): string {
 }
 
 /**
- * Extract a commit SHA from a parsed ref, returning null for branch/tag refs.
- * Only matches full 40-char hex SHAs to avoid misidentifying hex-only
- * branch or tag names (e.g. "cafebabe", "deadbeef") as commit refs.
- */
-function extractCommitRef(ref: string | undefined): string | null {
-  if (!ref) return null;
-  return /^[0-9a-f]{40}$/i.test(ref) ? ref.toLowerCase() : null;
-}
-
-/**
- * Resolve the current source fingerprint for a URL.
- * - Git hosts: latest commit SHA touching the skill path.
- * - HTTP: SHA-256 of the raw content.
- * Returns null if the check fails (network error, rate limit, etc.).
- */
-async function resolveCurrentFingerprint(
-  parsedUrl: ReturnType<typeof parseSkillUrl>
-): Promise<string | null> {
-  try {
-    if (parsedUrl.host === 'github.com' && parsedUrl.owner && parsedUrl.repo && parsedUrl.path) {
-      const ref = parsedUrl.ref ?? 'main';
-      const url = `https://api.github.com/repos/${parsedUrl.owner}/${parsedUrl.repo}/commits?path=${encodeURIComponent(parsedUrl.path)}&sha=${encodeURIComponent(ref)}&per_page=1`;
-      const res = await fetch(url, {
-        headers: { Accept: 'application/vnd.github.v3+json' },
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!res.ok) return null;
-      const data = (await res.json()) as Array<{ sha?: string }>;
-      return data[0]?.sha ?? null;
-    }
-
-    // HTTP sources: fetch content and hash it
-    const res = await fetch(parsedUrl.sourceUrl, {
-      headers: { 'User-Agent': 'vett-cli' },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return null;
-    const content = await res.text();
-    return createHash('sha256').update(content).digest('hex');
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Install skill files from manifest
  */
 function installSkillFiles(manifest: SkillManifest, skillDir: string): void {
@@ -311,156 +209,120 @@ export async function add(
 
   const s = p.spinner();
 
-  const parsed = parseAddInput(input);
-  let resolved: ResolvedResult | null = null;
-  let ingestUrl = input;
-
+  // Step 1: Resolve skill via the server
   s.start('Checking registry');
+  let detail: ApiSkillDetail;
   try {
-    if (parsed.kind === 'ref') {
-      const skill = await getSkillByRef(parsed.owner, parsed.repo, parsed.name);
-      if (skill) {
-        resolved = {
-          skill: toSkillInfo(skill),
-          version: toVersionInfo(selectVersion(skill, parsed.version)),
-        };
-      } else {
-        ingestUrl = `https://github.com/${parsed.owner}/${parsed.repo}/tree/${parsed.version || 'main'}/${parsed.name}`;
-      }
-    } else {
-      const skill = await getSkillByUrl(parsed.url);
-      if (skill) {
-        const parsedUrl = parseSkillUrl(parsed.url);
-        const commitSha = extractCommitRef(parsedUrl.ref);
+    const response = await resolveSkill(input);
 
-        if (commitSha) {
-          // Pinned to a specific commit — find that exact version
-          const match = skill.versions.find((v) => v.commitSha === commitSha);
-          if (match) {
-            resolved = { skill: toSkillInfo(skill), version: toVersionInfo(match) };
-          }
-          // else: specific commit not yet ingested — fall through to ingestion
-        } else {
-          // Non-pinned URL — check if source has changed since last ingest
-          const currentFingerprint = await resolveCurrentFingerprint(parsedUrl);
-          const latest = selectVersion(skill);
-          if (
-            currentFingerprint &&
-            latest.sourceFingerprint &&
-            currentFingerprint === latest.sourceFingerprint
-          ) {
-            // Source unchanged — use cached version
-            resolved = { skill: toSkillInfo(skill), version: toVersionInfo(latest) };
-          }
-          // else: source changed or no fingerprint — fall through to ingestion
+    if (response.status === 'not_found') {
+      s.stop('Not found');
+      p.log.error(response.message);
+      p.outro(pc.red('Installation failed'));
+      process.exit(1);
+    }
+
+    if (response.status === 'ready') {
+      s.stop('Found in registry');
+      detail = response.skill;
+    } else {
+      // processing — poll for completion
+      s.stop('Submitted for analysis');
+
+      s.start('Analyzing skill');
+      const pollStart = Date.now();
+      let job;
+      try {
+        job = await waitForJob(response.jobId, {
+          onProgress: (statusJob) => {
+            if (statusJob.message) {
+              s.message(statusJob.message);
+              return;
+            }
+            if (statusJob.status === 'processing') {
+              s.message('Analyzing skill');
+            } else if (statusJob.status === 'pending') {
+              const elapsed = Date.now() - pollStart;
+              s.message(
+                elapsed > 15_000 ? 'Waiting for available slot...' : 'Waiting for analysis to start'
+              );
+            }
+          },
+        });
+      } catch (error) {
+        s.stop('Analysis failed');
+        if (error instanceof UpgradeRequiredError) {
+          p.outro(pc.red('Installation failed'));
+          throw error;
+        }
+        p.log.error((error as Error).message);
+        p.outro(pc.red('Installation failed'));
+        process.exit(1);
+      }
+
+      if (job.status === 'failed') {
+        s.stop('Analysis failed');
+        p.log.error(job.hint || job.message || job.error || 'Unknown error');
+        p.outro(pc.red('Installation failed'));
+        process.exit(1);
+      }
+
+      s.stop('Analysis complete');
+      if (job.startedAt && job.completedAt) {
+        const durationMs = new Date(job.completedAt).getTime() - new Date(job.startedAt).getTime();
+        if (durationMs > 0) {
+          const seconds = Math.round(durationMs / 1000);
+          p.log.info(pc.dim(`Analysis completed in ${seconds}s`));
         }
       }
+
+      // Fetch full detail after job completes — use the slug from the
+      // completed job (authoritative) with fallback to the processing response.
+      const slug = job.slug ?? response.slug;
+      if (!slug) {
+        p.log.error('Server did not return a slug for the completed skill');
+        p.outro(pc.red('Installation failed'));
+        process.exit(1);
+      }
+
+      s.start('Fetching skill details');
+      const fetchedDetail = await getSkillDetail(slug);
+      if (!fetchedDetail || fetchedDetail.versions.length === 0) {
+        s.stop('Failed');
+        p.log.error('Skill not found in registry after analysis completed');
+        p.outro(pc.red('Installation failed'));
+        process.exit(1);
+      }
+      s.stop('Fetched');
+      detail = fetchedDetail;
     }
   } catch (error) {
-    s.stop('Registry lookup failed');
     if (error instanceof UpgradeRequiredError) {
+      s.stop('Registry lookup failed');
       p.outro(pc.red('Installation failed'));
       throw error;
     }
     if (error instanceof RateLimitError) {
+      s.stop('Registry lookup failed');
       p.log.error(`Rate limit exceeded. Please wait ${error.retryAfter} seconds and try again.`);
-    } else {
-      p.log.error((error as Error).message);
+      p.outro(pc.red('Installation failed'));
+      process.exit(1);
     }
-    p.outro(pc.red('Installation failed'));
-    process.exit(1);
+    // Re-throw process.exit calls (they manifest as errors in test)
+    throw error;
   }
 
-  if (resolved) {
-    s.stop('Found in registry');
-  } else {
-    s.stop('Not found in registry');
-
-    // Submit for ingestion
-    s.start('Submitting for analysis');
-    let ingestResponse;
-    try {
-      ingestResponse = await ingestSkill(ingestUrl);
-    } catch (error) {
-      s.stop('Submission failed');
-      if (error instanceof UpgradeRequiredError) {
-        p.outro(pc.red('Installation failed'));
-        throw error;
-      }
-      if (error instanceof RateLimitError) {
-        p.log.error(`Rate limit exceeded. Please wait ${error.retryAfter} seconds and try again.`);
-      } else {
-        p.log.error((error as Error).message);
-      }
-      p.outro(pc.red('Installation failed'));
-      process.exit(1);
-    }
-    s.stop('Submitted');
-
-    // Poll for completion
-    s.start('Analyzing skill');
-    let job;
-    const pollStart = Date.now();
-    try {
-      job = await waitForJob(ingestResponse.jobId, {
-        onProgress: (statusJob) => {
-          if (statusJob.message) {
-            s.message(statusJob.message);
-            return;
-          }
-          if (statusJob.status === 'processing') {
-            s.message('Analyzing skill');
-          } else if (statusJob.status === 'pending') {
-            const elapsed = Date.now() - pollStart;
-            s.message(
-              elapsed > 15_000 ? 'Waiting for available slot...' : 'Waiting for analysis to start'
-            );
-          }
-        },
-      });
-    } catch (error) {
-      s.stop('Analysis failed');
-      if (error instanceof UpgradeRequiredError) {
-        p.outro(pc.red('Installation failed'));
-        throw error;
-      }
-      p.log.error((error as Error).message);
-      p.outro(pc.red('Installation failed'));
-      process.exit(1);
-    }
-
-    // Handle failure
-    if (job.status === 'failed') {
-      s.stop('Analysis failed');
-      p.log.error(job.hint || job.message || job.error || 'Unknown error');
-      p.outro(pc.red('Installation failed'));
-      process.exit(1);
-    }
-
-    s.stop('Analysis complete');
-    if (job.startedAt && job.completedAt) {
-      const durationMs = new Date(job.completedAt).getTime() - new Date(job.startedAt).getTime();
-      if (durationMs > 0) {
-        const seconds = Math.round(durationMs / 1000);
-        p.log.info(pc.dim(`Analysis completed in ${seconds}s`));
-      }
-    }
-    // Resolve result via public registry endpoints rather than embedding results in job payload.
-    // This reduces jobId-based information disclosure and keeps the CLI aligned with canonical API data.
-    resolved = await resolveFromRegistryWithRetries(ingestUrl, {
-      owner: parsed.kind === 'ref' ? parsed.owner : undefined,
-      repo: parsed.kind === 'ref' ? parsed.repo : undefined,
-      name: parsed.kind === 'ref' ? parsed.name : undefined,
-    });
-  }
+  // Step 2: Select version
+  const version = selectVersion(detail);
+  const resolved: ResolvedResult = {
+    skill: toSkillInfo(detail),
+    version: toVersionInfo(version),
+  };
 
   const verdict = getVerdict(resolved.version.risk as RiskLevel);
 
   // Display skill info
-  const skillRef = resolved.skill.repo
-    ? `${resolved.skill.owner}/${resolved.skill.repo}/${resolved.skill.name}`
-    : `${resolved.skill.owner}/${resolved.skill.name}`;
-  p.note(formatSkillInfo(resolved), skillRef);
+  p.note(formatSkillInfo(resolved), detail.slug);
 
   // Block critical-risk skills
   if (verdict === 'blocked') {
@@ -499,11 +361,7 @@ export async function add(
   }
 
   // Check if already installed
-  const existing = getInstalledSkill(
-    resolved.skill.owner,
-    resolved.skill.repo,
-    resolved.skill.name
-  );
+  const existing = getInstalledSkillBySlug(detail.slug);
   if (existing && !options.force) {
     const replaceResult = await p.confirm({
       message: `Already installed (${existing.version}). Replace?`,
@@ -517,10 +375,20 @@ export async function add(
   }
 
   // Download and verify
+  if (!detail.id) {
+    p.log.error('Server did not return a skill ID required for download');
+    p.outro(pc.red('Installation failed'));
+    process.exit(1);
+  }
+
   s.start('Downloading and verifying');
   let manifestContent: ArrayBuffer;
   try {
-    manifestContent = await downloadArtifact(resolved.version.artifactUrl, resolved.version.hash);
+    manifestContent = await downloadArtifact(
+      detail.id,
+      resolved.version.version,
+      resolved.version.hash
+    );
   } catch (error) {
     s.stop('Download failed');
     if (error instanceof UpgradeRequiredError) {
@@ -644,12 +512,13 @@ export async function add(
     version: resolved.version.version,
     installedAt: new Date(),
     path: skillDir,
+    slug: detail.slug,
     agents: targetAgents,
     scope,
   });
 
   // Summary
-  p.log.success(`${skillRef}@${resolved.version.version}`);
+  p.log.success(`${detail.slug}@${resolved.version.version}`);
   p.log.info(`${pc.dim('Canonical:')} ${skillDir}`);
 
   if (installedAgentNames.length > 0) {
@@ -661,9 +530,11 @@ export async function add(
   p.outro(pc.green('Done'));
 }
 
-function selectVersion(skill: SkillDetail, version?: string): SkillVersion {
+export function selectVersion(skill: ApiSkillDetail, version?: string): ApiSkillVersion {
   if (version) {
-    const found = skill.versions.find((candidate) => candidate.version === version);
+    const found = skill.versions.find(
+      (candidate: ApiSkillVersion) => candidate.version === version
+    );
     if (!found) {
       throw new Error(`Version ${version} not found in registry`);
     }
@@ -677,53 +548,24 @@ function selectVersion(skill: SkillDetail, version?: string): SkillVersion {
   return skill.versions[0];
 }
 
-function toSkillInfo(skill: SkillDetail): SkillInfo {
+function toSkillInfo(skill: ApiSkillDetail): SkillInfo {
   return {
+    slug: skill.slug,
     owner: skill.owner,
     repo: skill.repo,
     name: skill.name,
-    description: skill.description,
+    description: skill.description ?? null,
   };
 }
 
-function toVersionInfo(version: SkillVersion): VersionInfo {
+function toVersionInfo(version: ApiSkillVersion): VersionInfo {
   return {
     version: version.version,
     hash: version.hash,
-    artifactUrl: version.artifactUrl,
-    size: version.size,
+    size: version.size ?? 0,
     risk: version.risk as RiskLevel | null,
-    summary: version.summary,
-    analysis: version.analysis,
+    summary: version.summary ?? null,
+    analysis: version.analysis as AnalysisResult | null,
     sigstoreBundle: version.sigstoreBundle ?? null,
   };
-}
-
-type AddInput =
-  | { kind: 'ref'; owner: string; repo: string; name: string; version?: string }
-  | { kind: 'url'; url: string };
-
-export function parseAddInput(input: string): AddInput {
-  const refResult = skillRefSchema.safeParse(input);
-  if (refResult.success) {
-    const atIndex = input.lastIndexOf('@');
-    let skillPath = input;
-    let version: string | undefined;
-
-    if (atIndex > 0) {
-      skillPath = input.slice(0, atIndex);
-      version = input.slice(atIndex + 1);
-    }
-
-    const parts = skillPath.split('/');
-    return {
-      kind: 'ref',
-      owner: parts[0],
-      repo: parts[1],
-      name: parts[2],
-      version,
-    };
-  }
-
-  return { kind: 'url', url: input };
 }

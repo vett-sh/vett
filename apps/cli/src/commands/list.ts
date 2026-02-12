@@ -1,6 +1,6 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { loadIndex } from '../config';
+import { loadIndex, backfillSlug } from '../config';
 import { agents, type AgentType } from '../agents';
 
 export async function list(): Promise<void> {
@@ -18,6 +18,7 @@ export async function list(): Promise<void> {
   for (const skill of skills) {
     const date = new Date(skill.installedAt).toLocaleDateString();
     const scope = skill.scope || 'global';
+    const slug = skill.slug ?? backfillSlug(skill);
 
     const skillAgents = (skill.agents || []) as AgentType[];
     const agentNames =
@@ -31,8 +32,7 @@ export async function list(): Promise<void> {
     lines.push(`${pc.dim('Installed:')} ${date}`);
     lines.push(`${pc.dim('Path:')} ${pc.dim(skill.path)}`);
 
-    const ownerRef = skill.repo ? `${skill.owner}/${skill.repo}` : skill.owner;
-    const header = `${pc.bold(skill.name)} ${pc.dim(`${ownerRef}@${skill.version}`)}`;
+    const header = `${pc.bold(skill.name)} ${pc.dim(`${slug}@${skill.version}`)}`;
     p.note(lines.join('\n'), header);
   }
 
